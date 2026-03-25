@@ -236,11 +236,9 @@ function PrepPage({ modules }) {
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)}>
           {viewing.video_url ? (
-            <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingBottom: '56.25%', background: '#000', marginBottom: 16 }}>
-              <iframe src={viewing.video_url} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }} allowFullScreen />
-            </div>
+            <a href={viewing.video_url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ width: '100%', padding: 16, fontSize: 15, marginBottom: 16 }}>Ouvrir le PDF</a>
           ) : (
-            <div style={{ background: '#000', borderRadius: 12, padding: 60, textAlign: 'center', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Vidéo bientôt disponible</div>
+            <div style={{ background: 'var(--bg)', borderRadius: 12, padding: 60, textAlign: 'center', color: 'var(--text-sec)', marginBottom: 16, border: '1px solid var(--border)' }}>PDF bientôt disponible</div>
           )}
           <button className="btn btn-secondary" onClick={() => setViewing(null)}>Fermer</button>
         </Modal>
