@@ -200,8 +200,11 @@ function ChaptersPage({ parts, completedIds, toggleComplete }) {
                       <div className={`checkbox ${isDone ? 'checked' : ''}`} onClick={() => toggleComplete(ch.id)}>{isDone && IC.check}</div>
                       <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontSize: 12, fontWeight: 800, fontFamily: 'monospace', flexShrink: 0 }}>{i + 1}</div>
                       <span style={{ flex: 1, fontSize: 14, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--text-sec)' : 'var(--text)' }}>{ch.title}</span>
-                      {ch.pdf_url && ch.pdf_url !== '' && (
-                        <a href={ch.pdf_url} target="_blank" rel="noreferrer" className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} PDF</a>
+                     {ch.pdf_url && ch.pdf_url !== '' && (
+                        <a href={ch.pdf_url} target="_blank" rel="noreferrer" className="badge badge-video row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Cours</a>
+                      )}
+                      {ch.exercises_pdf_url && ch.exercises_pdf_url !== '' && (
+                        <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
                       )}
                     </div>
                   )
