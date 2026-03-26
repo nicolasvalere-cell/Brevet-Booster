@@ -220,19 +220,38 @@ function ChaptersPage({ parts, completedIds, toggleComplete }) {
 // ═══════════════════════════════════════
 function PrepPage({ modules }) {
   const [viewing, setViewing] = useState(null)
+  const methodo = modules.filter(m => m.category !== 'memo')
+  const memos = modules.filter(m => m.category === 'memo')
+
+  const Section = ({ title, emoji, items }) => (
+    <div style={{ marginBottom: 32 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 26 }}>{emoji}</span> {title}
+      </h2>
+      {items.length === 0 ? (
+        <div style={{ background: 'var(--card)', borderRadius: 14, border: '1px solid var(--border)', padding: 40, textAlign: 'center', color: 'var(--text-sec)' }}>Bientôt disponible</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
+          {items.map((m, i) => (
+            <div key={m.id} className="chapter-card" onClick={() => setViewing(m)}>
+              <div style={{ width: 44, height: 44, borderRadius: 12, background: m.category === 'memo' ? 'var(--orange-bg)' : 'var(--video-bg)', color: m.category === 'memo' ? 'var(--orange-text)' : 'var(--video-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                {m.category === 'memo' ? IC.pdf : IC.play}
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{m.title}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>{m.category === 'memo' ? 'Fiche mémo' : `Module ${i + 1}`}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div>
       <h1 className="page-title">Préparation Brevet</h1>
-      <p className="page-subtitle">Méthodologie, attentes des examinateurs et conseils pour le jour J</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-        {modules.map((m, i) => (
-          <div key={m.id} className="chapter-card" onClick={() => setViewing(m)}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--video-bg)', color: 'var(--video-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>{IC.play}</div>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{m.title}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-sec)' }}>Module {i + 1}</div>
-          </div>
-        ))}
-      </div>
+      <p className="page-subtitle">Méthodologie, fiches mémo et conseils pour le jour J</p>
+      <Section title="Méthodologie" emoji="📋" items={methodo} />
+      <Section title="Fiches mémo spécial brevet" emoji="🎁" items={memos} />
       {viewing && (
         <Modal title={viewing.title} onClose={() => setViewing(null)}>
           {viewing.video_url ? (
