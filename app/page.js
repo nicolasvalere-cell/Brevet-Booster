@@ -211,9 +211,9 @@ function ChaptersPage({ parts, completedIds, toggleComplete }) {
                           <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
                         )}
                       </div>
-                      {ch.exercises_pdf_url && ch.exercises_pdf_url !== '' && (
-                        <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
-                      )}
+                      {ch.eval_pdf_url && ch.eval_pdf_url !== '' && (
+                          <a href={ch.eval_pdf_url} target="_blank" rel="noreferrer" className="badge" style={{ textDecoration: 'none', cursor: 'pointer', background: '#FEF3C7', color: '#92400E', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{IC.pdf} Auto-éval</a>
+                        )}
                     </div>
                   )
                 })}
