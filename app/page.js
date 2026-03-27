@@ -63,6 +63,7 @@ const IC = {
   dash: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
   chev: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
   chart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  game: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15" cy="11" r="0.5" fill="currentColor" stroke="none"/><circle cx="17" cy="13" r="0.5" fill="currentColor" stroke="none"/></svg>,
 }
 
 // ─── Helpers ───
@@ -600,6 +601,355 @@ function AdminContent({ parts, reload, showToast }) {
 }
 
 // ═══════════════════════════════════════
+// STUDENT: GAMES
+// ═══════════════════════════════════════
+function GameTimer({ timeLeft, total }) {
+  const pct = total > 0 ? (timeLeft / total) * 100 : 0
+  const color = timeLeft > 20 ? 'var(--success)' : timeLeft > 10 ? 'var(--orange)' : 'var(--danger)'
+  return (
+    <div style={{ width: '100%', background: 'var(--border)', borderRadius: 20, height: 12, overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 20, transition: 'width 1s linear' }} />
+    </div>
+  )
+}
+
+function MultiplicationGame({ userId, onBack }) {
+  const [state, setState] = useState('ready') // ready, playing, done
+  const [score, setScore] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(60)
+  const [question, setQuestion] = useState(null)
+  const [input, setInput] = useState('')
+  const [record, setRecord] = useState(0)
+  const [feedback, setFeedback] = useState(null)
+
+  useEffect(() => {
+    const loadRecord = async () => {
+      try {
+        const { data } = await supabase.from('game_records').select('best_score').eq('user_id', userId).eq('game_type', 'multiplication').single()
+        if (data) setRecord(data.best_score)
+      } catch {}
+    }
+    loadRecord()
+  }, [userId])
+
+  const newQuestion = () => {
+    const a = Math.floor(Math.random() * 10) + 2
+    const b = Math.floor(Math.random() * 10) + 2
+    setQuestion({ a, b, answer: a * b })
+    setInput('')
+    setFeedback(null)
+  }
+
+  const start = () => {
+    setState('playing')
+    setScore(0)
+    setTimeLeft(60)
+    newQuestion()
+  }
+
+  useEffect(() => {
+    if (state !== 'playing') return
+    if (timeLeft <= 0) {
+      setState('done')
+      const saveRecord = async () => {
+        try {
+          const { data: existing } = await supabase.from('game_records').select('best_score').eq('user_id', userId).eq('game_type', 'multiplication').single()
+          if (existing) {
+            if (score > existing.best_score) await supabase.from('game_records').update({ best_score: score, last_played: new Date().toISOString() }).eq('user_id', userId).eq('game_type', 'multiplication')
+          } else {
+            await supabase.from('game_records').insert({ user_id: userId, game_type: 'multiplication', best_score: score })
+          }
+          if (score > record) setRecord(score)
+        } catch {}
+      }
+      saveRecord()
+      return
+    }
+    const t = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
+    return () => clearTimeout(t)
+  }, [timeLeft, state, score, userId, record])
+
+  const checkAnswer = () => {
+    if (!input || !question) return
+    const num = parseInt(input, 10)
+    if (num === question.answer) {
+      setScore(prev => prev + 1)
+      setFeedback('correct')
+      setTimeout(() => newQuestion(), 300)
+    } else {
+      setFeedback('wrong')
+      setTimeout(() => setFeedback(null), 500)
+      setInput('')
+    }
+  }
+
+  if (state === 'ready') return (
+    <div style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 60, marginBottom: 16 }}>✖️</div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Tables de multiplication</h2>
+      <p style={{ color: 'var(--text-sec)', fontSize: 14, marginBottom: 8 }}>60 secondes pour répondre à un maximum de multiplications !</p>
+      {record > 0 && <p style={{ color: 'var(--orange)', fontWeight: 700, fontSize: 15, marginBottom: 20 }}>🏆 Ton record : {record} bonnes réponses</p>}
+      <button className="btn btn-primary" style={{ padding: '14px 40px', fontSize: 16, borderRadius: 14 }} onClick={start}>C&apos;est parti !</button>
+      <div style={{ marginTop: 16 }}><button className="btn btn-secondary btn-sm" onClick={onBack}>Retour</button></div>
+    </div>
+  )
+
+  if (state === 'done') return (
+    <div style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 60, marginBottom: 16 }}>{score > record ? '🎉' : '⏱️'}</div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Temps écoulé !</h2>
+      <div style={{ fontSize: 48, fontWeight: 900, fontFamily: 'monospace', color: 'var(--accent)', marginBottom: 8 }}>{score}</div>
+      <p style={{ color: 'var(--text-sec)', fontSize: 14, marginBottom: 4 }}>bonnes réponses</p>
+      {score > record && <p style={{ color: 'var(--success)', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>🎉 Nouveau record !</p>}
+      {score <= record && record > 0 && <p style={{ color: 'var(--text-sec)', fontSize: 13, marginBottom: 16 }}>Record à battre : {record}</p>}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <button className="btn btn-primary" onClick={start}>Rejouer</button>
+        <button className="btn btn-secondary" onClick={onBack}>Retour</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-sec)' }}>Score : <span style={{ color: 'var(--accent)', fontSize: 18, fontWeight: 800 }}>{score}</span></div>
+        <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: timeLeft <= 10 ? 'var(--danger)' : 'var(--text)' }}>{timeLeft}s</div>
+      </div>
+      <GameTimer timeLeft={timeLeft} total={60} />
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <div style={{ fontSize: 48, fontWeight: 900, fontFamily: 'monospace', color: 'var(--text)', marginBottom: 24 }}>
+          {question?.a} × {question?.b} = ?
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+          <input
+            type="number" value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && checkAnswer()}
+            autoFocus
+            style={{
+              width: 120, padding: '14px 20px', fontSize: 24, fontWeight: 800, textAlign: 'center',
+              borderRadius: 14, border: `3px solid ${feedback === 'correct' ? 'var(--success)' : feedback === 'wrong' ? 'var(--danger)' : 'var(--border)'}`,
+              background: feedback === 'correct' ? 'var(--success-bg)' : feedback === 'wrong' ? 'var(--danger-bg)' : 'white',
+              outline: 'none', fontFamily: 'monospace', transition: 'all 0.2s',
+            }}
+          />
+          <button className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 16 }} onClick={checkAnswer}>OK</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CalculMentalGame({ userId, onBack }) {
+  const [state, setState] = useState('ready')
+  const [difficulty, setDifficulty] = useState('facile')
+  const [score, setScore] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(60)
+  const [question, setQuestion] = useState(null)
+  const [input, setInput] = useState('')
+  const [record, setRecord] = useState(0)
+  const [feedback, setFeedback] = useState(null)
+
+  useEffect(() => {
+    const loadRecord = async () => {
+      try {
+        const { data } = await supabase.from('game_records').select('best_score').eq('user_id', userId).eq('game_type', 'calcul_' + difficulty).single()
+        if (data) setRecord(data.best_score)
+      } catch {}
+    }
+    loadRecord()
+  }, [userId, difficulty])
+
+  const newQuestion = useCallback(() => {
+    let a, b, op, answer
+    const ops = ['+', '-', '×']
+    op = ops[Math.floor(Math.random() * ops.length)]
+    if (difficulty === 'facile') {
+      a = Math.floor(Math.random() * 20) + 1
+      b = Math.floor(Math.random() * 20) + 1
+      if (op === '×') { a = Math.floor(Math.random() * 10) + 2; b = Math.floor(Math.random() * 10) + 2 }
+    } else if (difficulty === 'moyen') {
+      a = Math.floor(Math.random() * 50) + 10
+      b = Math.floor(Math.random() * 50) + 10
+      if (op === '×') { a = Math.floor(Math.random() * 12) + 2; b = Math.floor(Math.random() * 12) + 2 }
+    } else {
+      a = Math.floor(Math.random() * 100) + 20
+      b = Math.floor(Math.random() * 100) + 20
+      if (op === '×') { a = Math.floor(Math.random() * 15) + 5; b = Math.floor(Math.random() * 15) + 5 }
+    }
+    if (op === '-' && a < b) { const tmp = a; a = b; b = tmp }
+    answer = op === '+' ? a + b : op === '-' ? a - b : a * b
+    setQuestion({ a, b, op, answer })
+    setInput('')
+    setFeedback(null)
+  }, [difficulty])
+
+  const start = () => {
+    setState('playing')
+    setScore(0)
+    setTimeLeft(60)
+    newQuestion()
+  }
+
+  useEffect(() => {
+    if (state !== 'playing') return
+    if (timeLeft <= 0) {
+      setState('done')
+      const gameType = 'calcul_' + difficulty
+      const saveRecord = async () => {
+        try {
+          const { data: existing } = await supabase.from('game_records').select('best_score').eq('user_id', userId).eq('game_type', gameType).single()
+          if (existing) {
+            if (score > existing.best_score) await supabase.from('game_records').update({ best_score: score, last_played: new Date().toISOString() }).eq('user_id', userId).eq('game_type', gameType)
+          } else {
+            await supabase.from('game_records').insert({ user_id: userId, game_type: gameType, best_score: score })
+          }
+          if (score > record) setRecord(score)
+        } catch {}
+      }
+      saveRecord()
+      return
+    }
+    const t = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
+    return () => clearTimeout(t)
+  }, [timeLeft, state, score, userId, record, difficulty])
+
+  const checkAnswer = () => {
+    if (!input || !question) return
+    const num = parseInt(input, 10)
+    if (num === question.answer) {
+      setScore(prev => prev + 1)
+      setFeedback('correct')
+      setTimeout(() => newQuestion(), 300)
+    } else {
+      setFeedback('wrong')
+      setTimeout(() => setFeedback(null), 500)
+      setInput('')
+    }
+  }
+
+  if (state === 'ready') return (
+    <div style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 60, marginBottom: 16 }}>🧮</div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Calcul mental</h2>
+      <p style={{ color: 'var(--text-sec)', fontSize: 14, marginBottom: 20 }}>60 secondes — additions, soustractions et multiplications !</p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 20 }}>
+        {[['facile', '😊 Facile'], ['moyen', '💪 Moyen'], ['difficile', '🔥 Difficile']].map(([d, label]) => (
+          <button key={d} onClick={() => setDifficulty(d)} className={`btn btn-sm ${difficulty === d ? 'btn-primary' : 'btn-secondary'}`}>{label}</button>
+        ))}
+      </div>
+      {record > 0 && <p style={{ color: 'var(--orange)', fontWeight: 700, fontSize: 15, marginBottom: 20 }}>🏆 Record ({difficulty}) : {record}</p>}
+      <button className="btn btn-primary" style={{ padding: '14px 40px', fontSize: 16, borderRadius: 14 }} onClick={start}>C&apos;est parti !</button>
+      <div style={{ marginTop: 16 }}><button className="btn btn-secondary btn-sm" onClick={onBack}>Retour</button></div>
+    </div>
+  )
+
+  if (state === 'done') return (
+    <div style={{ textAlign: 'center', padding: 40 }}>
+      <div style={{ fontSize: 60, marginBottom: 16 }}>{score > record ? '🎉' : '⏱️'}</div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8 }}>Temps écoulé !</h2>
+      <div style={{ fontSize: 48, fontWeight: 900, fontFamily: 'monospace', color: 'var(--accent)', marginBottom: 8 }}>{score}</div>
+      <p style={{ color: 'var(--text-sec)', fontSize: 14, marginBottom: 4 }}>bonnes réponses ({difficulty})</p>
+      {score > record && <p style={{ color: 'var(--success)', fontWeight: 700, fontSize: 16, marginBottom: 16 }}>🎉 Nouveau record !</p>}
+      {score <= record && record > 0 && <p style={{ color: 'var(--text-sec)', fontSize: 13, marginBottom: 16 }}>Record à battre : {record}</p>}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <button className="btn btn-primary" onClick={start}>Rejouer</button>
+        <button className="btn btn-secondary" onClick={onBack}>Retour</button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-sec)' }}>Score : <span style={{ color: 'var(--accent)', fontSize: 18, fontWeight: 800 }}>{score}</span></div>
+        <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: timeLeft <= 10 ? 'var(--danger)' : 'var(--text)' }}>{timeLeft}s</div>
+      </div>
+      <GameTimer timeLeft={timeLeft} total={60} />
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <div style={{ fontSize: 48, fontWeight: 900, fontFamily: 'monospace', color: 'var(--text)', marginBottom: 24 }}>
+          {question?.a} {question?.op} {question?.b} = ?
+        </div>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
+          <input
+            type="number" value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && checkAnswer()}
+            autoFocus
+            style={{
+              width: 140, padding: '14px 20px', fontSize: 24, fontWeight: 800, textAlign: 'center',
+              borderRadius: 14, border: `3px solid ${feedback === 'correct' ? 'var(--success)' : feedback === 'wrong' ? 'var(--danger)' : 'var(--border)'}`,
+              background: feedback === 'correct' ? 'var(--success-bg)' : feedback === 'wrong' ? 'var(--danger-bg)' : 'white',
+              outline: 'none', fontFamily: 'monospace', transition: 'all 0.2s',
+            }}
+          />
+          <button className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 16 }} onClick={checkAnswer}>OK</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GamesPage({ userId }) {
+  const [activeGame, setActiveGame] = useState(null)
+  const [records, setRecords] = useState({})
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await supabase.from('game_records').select('game_type, best_score').eq('user_id', userId)
+        const map = {}
+        ;(data || []).forEach(r => { map[r.game_type] = r.best_score })
+        setRecords(map)
+      } catch {}
+    }
+    load()
+  }, [userId, activeGame])
+
+  if (activeGame === 'multiplication') return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <MultiplicationGame userId={userId} onBack={() => setActiveGame(null)} />
+    </div>
+  )
+
+  if (activeGame === 'calcul') return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <CalculMentalGame userId={userId} onBack={() => setActiveGame(null)} />
+    </div>
+  )
+
+  const games = [
+    { id: 'multiplication', emoji: '✖️', title: 'Tables de multiplication', desc: '60 secondes pour répondre à un max de multiplications', color: '#7C3AED', bg: '#EDE9FE', record: records.multiplication },
+    { id: 'calcul', emoji: '🧮', title: 'Calcul mental', desc: 'Additions, soustractions, multiplications — 3 niveaux', color: '#2563EB', bg: '#DBEAFE', record: Math.max(records.calcul_facile || 0, records.calcul_moyen || 0, records.calcul_difficile || 0) },
+  ]
+
+  return (
+    <div>
+      <h1 className="page-title">Jeux</h1>
+      <p className="page-subtitle">Entraîne-toi en t&apos;amusant et bats tes records !</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        {games.map(g => (
+          <div key={g.id} className="card" onClick={() => setActiveGame(g.id)} style={{ padding: 28, cursor: 'pointer', transition: 'all 0.2s', borderColor: 'var(--border)' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = g.color; e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.1)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}
+          >
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: g.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, marginBottom: 16 }}>{g.emoji}</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 6 }}>{g.title}</h3>
+            <p style={{ fontSize: 13, color: 'var(--text-sec)', marginBottom: 12, lineHeight: 1.5 }}>{g.desc}</p>
+            {g.record > 0 && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 20, background: '#FEF3C7', color: '#92400E', fontSize: 13, fontWeight: 700 }}>
+                🏆 Record : {g.record}
+              </div>
+            )}
+            {!g.record && (
+              <div style={{ fontSize: 13, color: 'var(--text-sec)', fontStyle: 'italic' }}>Pas encore de record — lance-toi !</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
 // ADMIN: PROGRESSION DASHBOARD
 // ═══════════════════════════════════════
 function AdminProgression({ students, parts }) {
@@ -786,6 +1136,7 @@ export default function Home() {
     { id: 'prep', label: 'Prépa Brevet', icon: IC.target },
     { id: 'exercises', label: 'Exos Brevet', icon: IC.edit },
     { id: 'favorites', label: 'Mes favoris', icon: IC.star },
+    { id: 'games', label: 'Jeux', icon: IC.game },
   ]
   const adminNav = [
     { id: 'admin-dash', label: 'Tableau de bord', icon: IC.dash },
@@ -803,6 +1154,7 @@ export default function Home() {
         {!isAdmin && page === 'prep' && <PrepPage modules={modules} />}
         {!isAdmin && page === 'exercises' && <ExercisesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
         {!isAdmin && page === 'favorites' && <FavoritesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
+        {!isAdmin && page === 'games' && <GamesPage userId={user.id} />}
         {isAdmin && page === 'admin-dash' && <AdminDashboard students={students} parts={parts} exercises={exercises} />}
         {isAdmin && page === 'admin-students' && <AdminStudents students={students} reload={loadData} showToast={showToast} />}
         {isAdmin && page === 'admin-content' && <AdminContent parts={parts} reload={loadData} showToast={showToast} />}
