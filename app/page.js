@@ -326,7 +326,173 @@ function ChaptersPage({ parts, completedIds, toggleComplete }) {
 }
 
 // ═══════════════════════════════════════
-// STUDENT: PREP (with Methodo + Fiches Memo)
+// SIMULATEUR DE NOTE DU BREVET 2026
+// ═══════════════════════════════════════
+function BrevetSimulator() {
+  const [showSim, setShowSim] = useState(false)
+  const [cc, setCc] = useState('') // controle continu
+  const [option, setOption] = useState('')
+  const [francais, setFrancais] = useState('')
+  const [maths, setMaths] = useState('')
+  const [hg, setHg] = useState('')
+  const [emc, setEmc] = useState('')
+  const [sciences, setSciences] = useState('')
+  const [oral, setOral] = useState('')
+
+  const parse = v => { const n = parseFloat(v); return isNaN(n) ? null : Math.min(20, Math.max(0, n)) }
+
+  const result = useMemo(() => {
+    const ccVal = parse(cc)
+    if (ccVal === null) return null
+
+    // Bonus option: points above 10
+    const optVal = parse(option)
+    let ccFinal = ccVal
+    if (optVal !== null && optVal > 10) ccFinal = Math.min(20, ccVal + (optVal - 10))
+
+    // Epreuves finales
+    const notes = [
+      { val: parse(francais), coef: 2 },
+      { val: parse(maths), coef: 2 },
+      { val: parse(hg), coef: 1.5 },
+      { val: parse(emc), coef: 0.5 },
+      { val: parse(sciences), coef: 2 },
+      { val: parse(oral), coef: 2 },
+    ]
+    const filled = notes.filter(n => n.val !== null)
+    if (filled.length === 0) return { moyenne: ccFinal * 0.4, partial: true, cc: ccFinal }
+
+    const totalCoef = filled.reduce((a, n) => a + n.coef, 0)
+    const totalPoints = filled.reduce((a, n) => a + n.val * n.coef, 0)
+    const epMoyenne = totalPoints / totalCoef
+
+    const allFilled = filled.length === 6
+    const moyenne = ccFinal * 0.4 + epMoyenne * 0.6
+
+    let mention = 'Non admis'
+    if (moyenne >= 18) mention = 'Très bien avec félicitations 🎉'
+    else if (moyenne >= 16) mention = 'Très bien'
+    else if (moyenne >= 14) mention = 'Bien'
+    else if (moyenne >= 12) mention = 'Assez bien'
+    else if (moyenne >= 10) mention = 'Admis'
+
+    return { moyenne: Math.round(moyenne * 100) / 100, mention, partial: !allFilled, cc: ccFinal, ep: Math.round(epMoyenne * 100) / 100 }
+  }, [cc, option, francais, maths, hg, emc, sciences, oral])
+
+  const mentionColor = m => {
+    if (!m) return 'var(--text-sec)'
+    if (m.includes('félicitations')) return '#7C3AED'
+    if (m.includes('Très bien')) return '#F59E0B'
+    if (m === 'Bien') return 'var(--accent)'
+    if (m === 'Assez bien') return 'var(--success)'
+    if (m === 'Admis') return 'var(--success)'
+    return 'var(--danger)'
+  }
+
+  const inputStyle = { width: '100%', padding: '10px 12px', border: '2px solid var(--border)', borderRadius: 10, fontSize: 15, fontWeight: 700, textAlign: 'center', outline: 'none', fontFamily: 'monospace', background: 'var(--bg)' }
+  const labelStyle = { fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, display: 'block' }
+
+  if (!showSim) return (
+    <div onClick={() => setShowSim(true)} className="card" style={{ padding: 24, cursor: 'pointer', marginBottom: 28, borderColor: 'var(--accent)', background: 'linear-gradient(135deg, #EEF2FF, #DBEAFE)' }}
+      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(37,99,235,0.15)' }}
+      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ fontSize: 40 }}>📊</div>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)', marginBottom: 4 }}>Simulateur de note du Brevet 2026</div>
+          <div style={{ fontSize: 13, color: 'var(--text-sec)' }}>Calcule ta moyenne estimée et découvre ta mention — Clique pour ouvrir</div>
+        </div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="card" style={{ marginBottom: 28, overflow: 'hidden' }}>
+      <div style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-dark))', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>📊</span>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'white' }}>Simulateur Brevet 2026</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Barème officiel — 40% contrôle continu + 60% épreuves</div>
+          </div>
+        </div>
+        <div onClick={() => setShowSim(false)} style={{ cursor: 'pointer', color: 'rgba(255,255,255,0.7)' }}>{IC.close}</div>
+      </div>
+
+      <div style={{ padding: 24 }}>
+        {/* Contrôle continu */}
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--success-bg)', color: 'var(--success)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>1</span>
+            Contrôle continu (40%)
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Moyenne générale /20</label>
+              <input type="number" step="0.1" min="0" max="20" placeholder="12.5" value={cc} onChange={e => setCc(e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Option facultative /20 (bonus)</label>
+              <input type="number" step="0.1" min="0" max="20" placeholder="Optionnel" value={option} onChange={e => setOption(e.target.value)} style={inputStyle} />
+            </div>
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 6 }}>Option : seuls les points au-dessus de 10 sont ajoutés</p>
+        </div>
+
+        {/* Épreuves finales */}
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent-bg)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800 }}>2</span>
+            Épreuves finales (60%)
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {[
+              ['Français (coef 2)', francais, setFrancais],
+              ['Maths (coef 2)', maths, setMaths],
+              ['Histoire-Géo (coef 1.5)', hg, setHg],
+              ['EMC (coef 0.5)', emc, setEmc],
+              ['Sciences (coef 2)', sciences, setSciences],
+              ['Oral (coef 2)', oral, setOral],
+            ].map(([label, val, setter]) => (
+              <div key={label}>
+                <label style={labelStyle}>{label}</label>
+                <input type="number" step="0.5" min="0" max="20" placeholder="/20" value={val} onChange={e => setter(e.target.value)} style={inputStyle} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Résultat */}
+        {result && (
+          <div style={{ background: 'var(--bg)', borderRadius: 14, padding: 24, textAlign: 'center', border: '1px solid var(--border)' }}>
+            {result.partial && <p style={{ fontSize: 12, color: 'var(--text-sec)', marginBottom: 8 }}>⚠️ Estimation partielle — remplis toutes les notes pour un résultat précis</p>}
+            <div style={{ fontSize: 14, color: 'var(--text-sec)', fontWeight: 600, marginBottom: 4 }}>Ta moyenne estimée</div>
+            <div style={{ fontSize: 52, fontWeight: 900, fontFamily: 'monospace', color: result.moyenne >= 10 ? 'var(--accent)' : 'var(--danger)', lineHeight: 1 }}>{result.moyenne.toFixed(2)}</div>
+            <div style={{ fontSize: 13, color: 'var(--text-sec)', margin: '8px 0 16px' }}>/20</div>
+            {result.mention && (
+              <div style={{ display: 'inline-block', padding: '8px 24px', borderRadius: 25, fontSize: 15, fontWeight: 800, color: 'white', background: mentionColor(result.mention) }}>
+                {result.mention}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 20, fontSize: 12, color: 'var(--text-sec)' }}>
+              <div>Contrôle continu : <b>{result.cc?.toFixed(1)}/20</b></div>
+              {result.ep !== undefined && <div>Épreuves : <b>{result.ep}/20</b></div>}
+            </div>
+          </div>
+        )}
+
+        {!result && (
+          <div style={{ background: 'var(--bg)', borderRadius: 14, padding: 32, textAlign: 'center', color: 'var(--text-sec)', border: '1px solid var(--border)' }}>
+            Entre ta moyenne de contrôle continu pour commencer
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// STUDENT: PREP (with Simulator + Methodo + Fiches Memo)
 // ═══════════════════════════════════════
 function PrepPage({ modules }) {
   const [viewing, setViewing] = useState(null)
@@ -359,7 +525,8 @@ function PrepPage({ modules }) {
   return (
     <div>
       <h1 className="page-title">Préparation Brevet</h1>
-      <p className="page-subtitle">Méthodologie, fiches mémo et conseils pour le jour J</p>
+      <p className="page-subtitle">Simulateur, méthodologie, fiches mémo et conseils pour le jour J</p>
+      <BrevetSimulator />
       <Section title="Méthodologie" emoji="📋" items={methodo} />
       <Section title="Fiches mémo spécial brevet" emoji="🎁" items={memos} />
       {viewing && (
