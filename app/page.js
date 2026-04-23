@@ -1117,6 +1117,7 @@ function CalculMentalGame({ userId, onBack }) {
 // ═══════════════════════════════════════
 function AssignmentsPage({ userId, earnXP }) {
   const [assignments, setAssignments] = useState([])
+  const [assignedIds, setAssignedIds] = useState([])
   const [submissions, setSubmissions] = useState([])
   const [uploading, setUploading] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -1124,8 +1125,20 @@ function AssignmentsPage({ userId, earnXP }) {
   useEffect(() => {
     const load = async () => {
       const { data: a } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
+      const { data: as } = await supabase.from('assignment_students').select('assignment_id').eq('user_id', userId)
       const { data: s } = await supabase.from('submissions').select('*').eq('user_id', userId)
-      setAssignments(a || [])
+      // Get all assignment IDs that have ANY student assignments
+      const { data: allAs } = await supabase.from('assignment_students').select('assignment_id')
+      const assignedToSpecific = [...new Set((allAs || []).map(x => x.assignment_id))]
+      const myAssigned = (as || []).map(x => x.assignment_id)
+      // Show: assignments assigned to me OR assignments not assigned to anyone specific (= for all)
+      const visible = (a || []).filter(assignment => {
+        const hasSpecific = assignedToSpecific.includes(assignment.id)
+        if (!hasSpecific) return true // assigned to all
+        return myAssigned.includes(assignment.id) // assigned specifically to me
+      })
+      setAssignments(visible)
+      setAssignedIds(myAssigned)
       setSubmissions(s || [])
       setLoading(false)
     }
@@ -1134,12 +1147,17 @@ function AssignmentsPage({ userId, earnXP }) {
 
   const getSubmission = (assignmentId) => submissions.find(s => s.assignment_id === assignmentId)
 
+  const isOverdue = (a) => {
+    if (!a.due_date) return false
+    return new Date(a.due_date) < new Date() && !getSubmission(a.id)
+  }
+
   const handleUpload = async (assignmentId, file) => {
     if (!file) return
     setUploading(assignmentId)
     try {
       const ext = file.name.split('.').pop()
-      const path = `${userId}/${assignmentId}.${ext}`
+      const path = `${userId}/${assignmentId}_${Date.now()}.${ext}`
       const { error: uploadErr } = await supabase.storage.from('submissions').upload(path, file, { upsert: true })
       if (uploadErr) { alert('Erreur upload : ' + uploadErr.message); setUploading(null); return }
       const { data: urlData } = supabase.storage.from('submissions').getPublicUrl(path)
@@ -1168,15 +1186,26 @@ function AssignmentsPage({ userId, earnXP }) {
           {assignments.map(a => {
             const sub = getSubmission(a.id)
             const isUploading = uploading === a.id
+            const overdue = isOverdue(a)
             return (
-              <div key={a.id} className="card" style={{ padding: 20 }}>
+              <div key={a.id} className="card" style={{ padding: 20, borderColor: overdue ? 'var(--danger)' : undefined }}>
+                {/* Status badge */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                  {!sub && !overdue && <span className="badge" style={{ background: '#FEF3C7', color: '#92400E' }}>🔴 À rendre</span>}
+                  {!sub && overdue && <span className="badge badge-danger">⚠️ En retard</span>}
+                  {sub && !sub.corrected && <span className="badge" style={{ background: '#FEF3C7', color: '#92400E' }}>🟡 En attente de correction</span>}
+                  {sub && sub.corrected && <span className="badge badge-success">🟢 Corrigé — {sub.score}/20</span>}
+                  {a.due_date && <span className="badge" style={{ background: 'var(--bg)', color: 'var(--text-sec)' }}>📅 {new Date(a.due_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</span>}
+                </div>
+
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 200 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 18 }}>📝</span>
-                      <h3 style={{ fontSize: 16, fontWeight: 700 }}>{a.title}</h3>
-                    </div>
+                    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{a.title}</h3>
                     {a.description && <p style={{ fontSize: 13, color: 'var(--text-sec)', lineHeight: 1.5, marginBottom: 8 }}>{a.description}</p>}
+                    {/* Attached image from prof */}
+                    {a.image_url && a.image_url !== '' && (
+                      <a href={a.image_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--accent)', marginBottom: 8 }}>📎 Voir l&apos;énoncé joint</a>
+                    )}
                     <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>Donné le {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div>
                   </div>
                   <div style={{ textAlign: 'center', minWidth: 140 }}>
@@ -1186,20 +1215,16 @@ function AssignmentsPage({ userId, earnXP }) {
                           📷 {isUploading ? 'Envoi...' : 'Envoyer ma copie'}
                           <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUpload(a.id, e.target.files[0])} disabled={isUploading} />
                         </label>
-                        <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 6 }}>Photo ou image</div>
                       </div>
                     ) : (
                       <div>
-                        <div className="badge badge-success" style={{ padding: '6px 14px', fontSize: 13 }}>✅ Envoyé</div>
-                        {sub.corrected ? (
-                          <div style={{ marginTop: 8 }}>
+                        {sub.corrected && (
+                          <div style={{ marginBottom: 8 }}>
                             <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: sub.score >= 10 ? 'var(--success)' : 'var(--danger)' }}>{sub.score}/20</div>
                             {sub.feedback && <p style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 4, lineHeight: 1.4 }}>{sub.feedback}</p>}
                           </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 6 }}>⏳ En attente de correction</div>
                         )}
-                        <a href={sub.image_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, display: 'inline-block' }}>Voir ma copie</a>
+                        <a href={sub.image_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)' }}>Voir ma copie</a>
                       </div>
                     )}
                   </div>
@@ -1214,33 +1239,61 @@ function AssignmentsPage({ userId, earnXP }) {
 }
 
 // ═══════════════════════════════════════
-// ADMIN: ASSIGNMENTS
+// ADMIN: ASSIGNMENTS (enhanced)
 // ═══════════════════════════════════════
 function AdminAssignments({ students }) {
   const [assignments, setAssignments] = useState([])
   const [submissions, setSubmissions] = useState([])
+  const [assignStudents, setAssignStudents] = useState({})
   const [modal, setModal] = useState(false)
   const [corrModal, setCorrModal] = useState(null)
   const [title, setTitle] = useState('')
   const [desc, setDesc] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [imgFile, setImgFile] = useState(null)
+  const [selectedStudents, setSelectedStudents] = useState([])
+  const [assignAll, setAssignAll] = useState(true)
   const [score, setScore] = useState('')
   const [feedback, setFeedback] = useState('')
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
 
   const load = async () => {
     const { data: a } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
     const { data: s } = await supabase.from('submissions').select('*')
+    const { data: as } = await supabase.from('assignment_students').select('*')
     setAssignments(a || [])
     setSubmissions(s || [])
+    const asMap = {}
+    ;(as || []).forEach(x => { if (!asMap[x.assignment_id]) asMap[x.assignment_id] = []; asMap[x.assignment_id].push(x.user_id) })
+    setAssignStudents(asMap)
     setLoading(false)
   }
   useEffect(() => { load() }, [])
 
   const addAssignment = async () => {
     if (!title) return
-    await supabase.from('assignments').insert({ title, description: desc })
-    setTitle(''); setDesc(''); setModal(false); load()
+    setCreating(true)
+    let imageUrl = ''
+    // Upload image if provided
+    if (imgFile) {
+      const ext = imgFile.name.split('.').pop()
+      const path = `enonces/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('submissions').upload(path, imgFile)
+      if (!error) {
+        const { data: urlData } = supabase.storage.from('submissions').getPublicUrl(path)
+        imageUrl = urlData.publicUrl
+      }
+    }
+    const { data: newA } = await supabase.from('assignments').insert({ title, description: desc, due_date: dueDate || null, image_url: imageUrl }).select().single()
+    // Assign to specific students if not all
+    if (!assignAll && selectedStudents.length > 0 && newA) {
+      const rows = selectedStudents.map(uid => ({ assignment_id: newA.id, user_id: uid }))
+      await supabase.from('assignment_students').insert(rows)
+    }
+    setTitle(''); setDesc(''); setDueDate(''); setImgFile(null); setSelectedStudents([]); setAssignAll(true); setModal(false); setCreating(false); load()
   }
+
   const delAssignment = async (id) => { await supabase.from('assignments').delete().eq('id', id); load() }
 
   const correctSubmission = async () => {
@@ -1250,72 +1303,132 @@ function AdminAssignments({ students }) {
   }
 
   const getStudent = (userId) => students.find(s => s.id === userId)
+  const toggleStudent = (uid) => setSelectedStudents(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid])
+
+  const getAssignedStudents = (assignmentId) => {
+    const specific = assignStudents[assignmentId]
+    if (!specific || specific.length === 0) return students.filter(s => s.active) // all
+    return students.filter(s => specific.includes(s.id))
+  }
+
+  const isOverdue = (a, sub) => {
+    if (!a.due_date) return false
+    return new Date(a.due_date) < new Date() && !sub
+  }
 
   if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-sec)' }}>Chargement...</div>
 
   return (
     <div>
       <h1 className="page-title">Gestion des devoirs</h1>
-      <p className="page-subtitle">Crée des devoirs et corrige les rendus</p>
+      <p className="page-subtitle">Crée des devoirs, assigne-les et corrige les rendus</p>
       <button className="btn btn-primary" onClick={() => setModal(true)} style={{ marginBottom: 20 }}>{IC.plus} Nouveau devoir</button>
 
       {assignments.map(a => {
+        const targeted = getAssignedStudents(a.id)
+        const isForAll = !assignStudents[a.id] || assignStudents[a.id].length === 0
         const subs = submissions.filter(s => s.assignment_id === a.id)
+        const subUserIds = subs.map(s => s.user_id)
+        const notRendered = targeted.filter(s => !subUserIds.includes(s.id))
+
         return (
           <div key={a.id} className="card" style={{ marginBottom: 16 }}>
-            <div className="card-header">
-              <div>
-                <span style={{ fontWeight: 700 }}>{a.title}</span>
-                {a.description && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-sec)' }}>{a.description}</span>}
+            <div className="card-header" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontWeight: 700 }}>{a.title}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 2 }}>
+                  {isForAll ? '👥 Tous les élèves' : `👤 ${targeted.map(s => s.first_name).join(', ')}`}
+                  {a.due_date && <span style={{ marginLeft: 8 }}>📅 {new Date(a.due_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</span>}
+                </div>
               </div>
-              <div className="row gap-sm">
-                <span className="badge" style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}>{subs.length} rendu{subs.length > 1 ? 's' : ''}</span>
+              <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
+                {a.image_url && a.image_url !== '' && <a href={a.image_url} target="_blank" rel="noreferrer" className="badge" style={{ background: 'var(--accent-bg)', color: 'var(--accent)', textDecoration: 'none' }}>📎 Énoncé</a>}
+                <span className="badge" style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}>{subs.length}/{targeted.length} rendu{subs.length > 1 ? 's' : ''}</span>
                 <button onClick={() => delAssignment(a.id)} style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-sec)' }}>{IC.trash}</button>
               </div>
             </div>
-            {subs.length === 0 ? (
-              <div style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-sec)', textAlign: 'center' }}>Aucun rendu pour l&apos;instant</div>
-            ) : (
-              subs.map(sub => {
-                const st = getStudent(sub.user_id)
-                return (
-                  <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)', gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 150 }}>
-                      <span style={{ fontWeight: 600, fontSize: 14 }}>{st ? `${st.first_name} ${st.last_name}` : 'Élève'}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>{new Date(sub.submitted_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
-                      <a href={sub.image_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">📷 Voir</a>
-                      {sub.corrected ? (
-                        <span className="badge badge-success" style={{ fontSize: 14, fontWeight: 800 }}>{sub.score}/20</span>
-                      ) : (
-                        <button className="btn btn-primary btn-sm" onClick={() => { setCorrModal(sub); setScore(''); setFeedback('') }}>Corriger</button>
-                      )}
-                    </div>
+
+            {/* Students who submitted */}
+            {subs.map(sub => {
+              const st = getStudent(sub.user_id)
+              return (
+                <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 120 }}>
+                    <span className="badge badge-success" style={{ fontSize: 10, padding: '2px 6px' }}>✅</span>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{st ? `${st.first_name} ${st.last_name}` : 'Élève'}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>{new Date(sub.submitted_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
                   </div>
-                )
-              })
-            )}
+                  <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
+                    <a href={sub.image_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">📷 Voir</a>
+                    {sub.corrected ? (
+                      <span className="badge badge-success" style={{ fontSize: 14, fontWeight: 800 }}>{sub.score}/20</span>
+                    ) : (
+                      <button className="btn btn-primary btn-sm" onClick={() => { setCorrModal(sub); setScore(''); setFeedback('') }}>Corriger</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Students who haven't submitted */}
+            {notRendered.map(st => {
+              const overdue = isOverdue(a, false)
+              return (
+                <div key={st.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: overdue ? '#FEF2F2' : undefined }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="badge" style={{ background: overdue ? 'var(--danger-bg)' : 'var(--bg)', color: overdue ? 'var(--danger)' : 'var(--text-sec)', fontSize: 10, padding: '2px 6px' }}>{overdue ? '⚠️' : '⏳'}</span>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: overdue ? 'var(--danger)' : 'var(--text)' }}>{st.first_name} {st.last_name}</span>
+                  </div>
+                  <span style={{ fontSize: 12, color: overdue ? 'var(--danger)' : 'var(--text-sec)', fontWeight: overdue ? 700 : 400 }}>{overdue ? 'En retard' : 'Pas encore rendu'}</span>
+                </div>
+              )
+            })}
           </div>
         )
       })}
 
+      {/* Create modal */}
       {modal && (
         <Modal title="Nouveau devoir" onClose={() => setModal(false)}>
-          <div className="form-group"><label className="form-label">Titre</label><input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Devoir n°3 — Pythagore" autoFocus /></div>
-          <div className="form-group"><label className="form-label">Consigne (optionnel)</label><input className="form-input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Exercices 1 à 4 page 12" /></div>
-          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setModal(false)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={addAssignment}>Créer</button></div>
+          <div className="form-group"><label className="form-label">Titre *</label><input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Devoir n°3 — Pythagore" autoFocus /></div>
+          <div className="form-group"><label className="form-label">Consigne</label><input className="form-input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Exercices 1 à 4 page 12" /></div>
+          <div className="form-group"><label className="form-label">Date limite (optionnel)</label><input className="form-input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">Joindre un énoncé (photo/image)</label>
+            <input type="file" accept="image/*" onChange={e => setImgFile(e.target.files[0])} style={{ fontSize: 13 }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Assigner à</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <button className={`btn btn-sm ${assignAll ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setAssignAll(true); setSelectedStudents([]) }}>Tous les élèves</button>
+              <button className={`btn btn-sm ${!assignAll ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setAssignAll(false)}>Choisir</button>
+            </div>
+            {!assignAll && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 10, maxHeight: 200, overflowY: 'auto' }}>
+                {students.filter(s => s.active).map(s => (
+                  <div key={s.id} onClick={() => toggleStudent(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', background: selectedStudents.includes(s.id) ? 'var(--accent-bg)' : 'white' }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 5, border: selectedStudents.includes(s.id) ? 'none' : '2px solid var(--border)', background: selectedStudents.includes(s.id) ? 'var(--accent)' : 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {selectedStudents.includes(s.id) && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </div>
+                    <span style={{ fontSize: 14, fontWeight: 500 }}>{s.first_name} {s.last_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setModal(false)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={addAssignment} disabled={creating}>{creating ? 'Création...' : 'Créer'}</button></div>
         </Modal>
       )}
 
+      {/* Correct modal */}
       {corrModal && (
         <Modal title="Corriger le devoir" onClose={() => setCorrModal(null)}>
           <div style={{ marginBottom: 16 }}>
             <a href={corrModal.image_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>📷 Voir la copie de l&apos;élève</a>
           </div>
           <div className="form-group"><label className="form-label">Note /20</label><input className="form-input" type="number" step="0.5" min="0" max="20" value={score} onChange={e => setScore(e.target.value)} placeholder="15" /></div>
-          <div className="form-group"><label className="form-label">Commentaire (optionnel)</label><input className="form-input" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Ex: Bon travail, attention aux signes" /></div>
-          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setCorrModal(null)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={correctSubmission}>Valider la note</button></div>
+          <div className="form-group"><label className="form-label">Commentaire</label><input className="form-input" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Ex: Bon travail, attention aux signes" /></div>
+          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setCorrModal(null)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={correctSubmission}>Valider</button></div>
         </Modal>
       )}
     </div>
