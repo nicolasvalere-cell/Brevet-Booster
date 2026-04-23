@@ -19,6 +19,26 @@ function getNextBadge(count) {
   return remaining.find(b => count < b.min) || null
 }
 
+// ─── XP System ───
+const XP_ACTIONS = {
+  complete_chapter: { xp: 50, label: 'Chapitre terminé' },
+  open_pdf: { xp: 5, label: 'PDF ouvert' },
+  streak_day: { xp: 20, label: 'Streak maintenu' },
+  game_played: { xp: 10, label: 'Jeu terminé' },
+  game_record: { xp: 25, label: 'Nouveau record' },
+}
+const XP_LEVELS = [
+  { level: 1, name: 'Débutant', min: 0, emoji: '🌱' },
+  { level: 2, name: 'Apprenti', min: 100, emoji: '📗' },
+  { level: 3, name: 'Intermédiaire', min: 250, emoji: '📘' },
+  { level: 4, name: 'Avancé', min: 500, emoji: '⚡' },
+  { level: 5, name: 'Expert', min: 1000, emoji: '🔥' },
+  { level: 6, name: 'Maître', min: 2000, emoji: '👑' },
+  { level: 7, name: 'Légende', min: 3500, emoji: '🏆' },
+]
+function getLevel(xp) { return [...XP_LEVELS].reverse().find(l => xp >= l.min) || XP_LEVELS[0] }
+function getNextLevel(xp) { return XP_LEVELS.find(l => xp < l.min) || null }
+
 // ─── Fun Facts ───
 const FUN_FACTS = [
   "Le nombre π a été calculé à plus de 100 000 milliards de décimales !",
@@ -163,11 +183,15 @@ function Sidebar({ items, current, setCurrent, onLogout, role }) {
 // ═══════════════════════════════════════
 // STUDENT: WELCOME (with badges, streak, fun facts)
 // ═══════════════════════════════════════
-function WelcomePage({ settings, completedIds, totalChapters, streak }) {
+function WelcomePage({ settings, completedIds, totalChapters, streak, xp }) {
   const pct = totalChapters > 0 ? Math.round((completedIds.length / totalChapters) * 100) : 0
   const badge = getBadge(completedIds.length)
   const next = getNextBadge(completedIds.length)
   const [funFact] = useState(() => FUN_FACTS[Math.floor(Math.random() * FUN_FACTS.length)])
+  const level = getLevel(xp)
+  const nextLevel = getNextLevel(xp)
+  const xpInLevel = nextLevel ? xp - level.min : 0
+  const xpForNext = nextLevel ? nextLevel.min - level.min : 1
 
   return (
     <div>
@@ -225,6 +249,44 @@ function WelcomePage({ settings, completedIds, totalChapters, streak }) {
         </div>
       </div>
 
+      {/* XP Level */}
+      <div className="card" style={{ padding: 22, marginBottom: 20, background: 'linear-gradient(135deg, #1E1B4B, #312E81)', color: 'white', border: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 32 }}>{level.emoji}</span>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Niveau {level.level}</div>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{level.name}</div>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: '#A5B4FC' }}>{xp}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>XP total</div>
+          </div>
+        </div>
+        {nextLevel && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
+              <span>{level.name}</span>
+              <span>{nextLevel.emoji} {nextLevel.name} — {nextLevel.min} XP</span>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, height: 8, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, (xpInLevel / xpForNext) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #818CF8, #A5B4FC)', borderRadius: 20, transition: 'width 0.5s' }} />
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, textAlign: 'center' }}>Encore {nextLevel.min - xp} XP pour le prochain niveau</div>
+          </div>
+        )}
+        {!nextLevel && <div style={{ fontSize: 13, color: '#A5B4FC', textAlign: 'center' }}>🏆 Niveau maximum atteint !</div>}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
+          {Object.entries(XP_ACTIONS).map(([key, val]) => (
+            <div key={key} style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#A5B4FC' }}>+{val.xp}</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{val.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* All badges overview */}
       <div className="card" style={{ padding: 20, marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>Badges à débloquer</div>
@@ -263,13 +325,14 @@ function WelcomePage({ settings, completedIds, totalChapters, streak }) {
 // ═══════════════════════════════════════
 // STUDENT: CHAPTERS (3 PDFs + auto-eval)
 // ═══════════════════════════════════════
-function ChaptersPage({ parts, completedIds, toggleComplete, userId }) {
+function ChaptersPage({ parts, completedIds, toggleComplete, userId, earnXP }) {
   const [openPart, setOpenPart] = useState(parts[0]?.id || null)
   const totalCh = parts.reduce((a, p) => a + (p.chapters?.length || 0), 0)
 
   const trackPdf = async (pdfType, chapterTitle) => {
     if (!userId) return
     try { await supabase.from('pdf_clicks').insert({ user_id: userId, pdf_type: pdfType, chapter_title: chapterTitle }) } catch {}
+    await earnXP(userId, 'open_pdf')
   }
   return (
     <div>
@@ -1060,7 +1123,7 @@ function CalculMentalGame({ userId, onBack }) {
   )
 }
 
-function GamesPage({ userId }) {
+function GamesPage({ userId, earnXP }) {
   const [activeGame, setActiveGame] = useState(null)
   const [records, setRecords] = useState({})
 
@@ -1078,7 +1141,7 @@ function GamesPage({ userId }) {
 
   if (activeGame === 'multiplication') return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <MultiplicationGame userId={userId} onBack={() => setActiveGame(null)} />
+      <MultiplicationGame userId={userId} onBack={() => setActiveGame(null)} earnXP={earnXP} />
     </div>
   )
 
@@ -1128,6 +1191,7 @@ function AdminProgression({ students, parts }) {
   const [progressData, setProgressData] = useState({})
   const [streakData, setStreakData] = useState({})
   const [pdfData, setPdfData] = useState({})
+  const [xpData, setXpData] = useState({})
   const totalCh = parts.reduce((a, p) => a + (p.chapters?.length || 0), 0)
 
   useEffect(() => {
@@ -1135,6 +1199,7 @@ function AdminProgression({ students, parts }) {
       const { data: progress } = await supabase.from('student_progress').select('user_id, chapter_id')
       const { data: streaks } = await supabase.from('student_streaks').select('*')
       const { data: pdfClicks } = await supabase.from('pdf_clicks').select('user_id')
+      const { data: xpRecords } = await supabase.from('student_xp').select('user_id, total_xp, level')
       const grouped = {}
       ;(progress || []).forEach(p => {
         if (!grouped[p.user_id]) grouped[p.user_id] = []
@@ -1147,6 +1212,9 @@ function AdminProgression({ students, parts }) {
       const pdfMap = {}
       ;(pdfClicks || []).forEach(c => { pdfMap[c.user_id] = (pdfMap[c.user_id] || 0) + 1 })
       setPdfData(pdfMap)
+      const xpMap = {}
+      ;(xpRecords || []).forEach(x => { xpMap[x.user_id] = x })
+      setXpData(xpMap)
     }
     load()
   }, [])
@@ -1268,9 +1336,34 @@ export default function Home() {
   const [completedIds, setCompletedIds] = useState([])
   const [favoriteIds, setFavoriteIds] = useState([])
   const [streak, setStreak] = useState({})
+  const [xp, setXp] = useState(0)
+  const [xpPopup, setXpPopup] = useState(null)
 
   const showToast = useCallback(m => { setToast(m); setTimeout(() => setToast(null), 2500) }, [])
   const totalChapters = useMemo(() => parts.reduce((a, p) => a + (p.chapters?.length || 0), 0), [parts])
+
+  // XP system
+  const earnXP = useCallback(async (userId, actionKey) => {
+    const action = XP_ACTIONS[actionKey]
+    if (!action || !userId) return
+    try {
+      // Log to history
+      await supabase.from('xp_history').insert({ user_id: userId, action: actionKey, xp_earned: action.xp })
+      // Update total
+      const { data: existing } = await supabase.from('student_xp').select('*').eq('user_id', userId).single()
+      const newTotal = (existing?.total_xp || 0) + action.xp
+      const newLevel = getLevel(newTotal).level
+      if (existing) {
+        await supabase.from('student_xp').update({ total_xp: newTotal, level: newLevel }).eq('user_id', userId)
+      } else {
+        await supabase.from('student_xp').insert({ user_id: userId, total_xp: newTotal, level: newLevel })
+      }
+      setXp(newTotal)
+      // Show XP popup
+      setXpPopup({ xp: action.xp, label: action.label })
+      setTimeout(() => setXpPopup(null), 2000)
+    } catch {}
+  }, [])
 
   const loadData = useCallback(async () => {
     const [studentsRes, partsRes, chaptersRes, modulesRes, exercisesRes, settingsRes] = await Promise.all([
@@ -1324,6 +1417,10 @@ export default function Home() {
       const totalLogins = (existing.total_logins || 0) + 1
       await supabase.from('student_streaks').update({ current_streak: newStreak, last_login: today, best_streak: bestStreak, total_logins: totalLogins, last_login_time: nowISO }).eq('user_id', userId)
       setStreak({ current_streak: newStreak, last_login: today, best_streak: bestStreak, total_logins: totalLogins })
+      // Award streak XP
+      if (newStreak > 1) {
+        try { await supabase.from('xp_history').insert({ user_id: userId, action: 'streak_day', xp_earned: 20 }); const { data: xpData } = await supabase.from('student_xp').select('total_xp').eq('user_id', userId).single(); const nt = (xpData?.total_xp || 0) + 20; await supabase.from('student_xp').upsert({ user_id: userId, total_xp: nt, level: getLevel(nt).level }) } catch {}
+      }
     } else {
       await supabase.from('student_streaks').insert({ user_id: userId, current_streak: 1, last_login: today, best_streak: 1, total_logins: 1, last_login_time: nowISO })
       setStreak({ current_streak: 1, last_login: today, best_streak: 1, total_logins: 1 })
@@ -1338,7 +1435,14 @@ export default function Home() {
     if (!data.active && data.role !== 'admin') { setErr('Ton compte est désactivé, contacte ton prof'); return }
     setUser(data)
     if (data.role === 'admin') { setPage('admin-dash') }
-    else { setPage('welcome'); await loadStudentData(data.id); await updateStreak(data.id) }
+    else { setPage('welcome'); await loadStudentData(data.id); await updateStreak(data.id); await loadXP(data.id) }
+  }
+
+  const loadXP = async (userId) => {
+    try {
+      const { data } = await supabase.from('student_xp').select('total_xp').eq('user_id', userId).single()
+      if (data) setXp(data.total_xp)
+    } catch {}
   }
 
   const toggleComplete = async (chapterId) => {
@@ -1349,6 +1453,7 @@ export default function Home() {
     } else {
       await supabase.from('student_progress').insert({ user_id: user.id, chapter_id: chapterId })
       setCompletedIds(prev => [...prev, chapterId])
+      await earnXP(user.id, 'complete_chapter')
     }
   }
 
@@ -1388,18 +1493,19 @@ export default function Home() {
     <div className="app-layout">
       <Sidebar items={isAdmin ? adminNav : studentNav} current={page} setCurrent={setPage} onLogout={logout} role={user.role} />
       <div className="main-content">
-        {!isAdmin && page === 'welcome' && <WelcomePage settings={settings} completedIds={completedIds} totalChapters={totalChapters} streak={streak} />}
-        {!isAdmin && page === 'chapters' && <ChaptersPage parts={parts} completedIds={completedIds} toggleComplete={toggleComplete} userId={user.id} />}
+        {!isAdmin && page === 'welcome' && <WelcomePage settings={settings} completedIds={completedIds} totalChapters={totalChapters} streak={streak} xp={xp} />}
+        {!isAdmin && page === 'chapters' && <ChaptersPage parts={parts} completedIds={completedIds} toggleComplete={toggleComplete} userId={user.id} earnXP={earnXP} />}
         {!isAdmin && page === 'prep' && <PrepPage modules={modules} />}
         {!isAdmin && page === 'exercises' && <ExercisesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
         {!isAdmin && page === 'favorites' && <FavoritesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
-        {!isAdmin && page === 'games' && <GamesPage userId={user.id} />}
+        {!isAdmin && page === 'games' && <GamesPage userId={user.id} earnXP={earnXP} />}
         {isAdmin && page === 'admin-dash' && <AdminDashboard students={students} parts={parts} exercises={exercises} />}
         {isAdmin && page === 'admin-students' && <AdminStudents students={students} reload={loadData} showToast={showToast} />}
         {isAdmin && page === 'admin-content' && <AdminContent parts={parts} reload={loadData} showToast={showToast} />}
         {isAdmin && page === 'admin-progress' && <AdminProgression students={students} parts={parts} />}
       </div>
       {toast && <Toast message={toast} />}
+      {xpPopup && <div style={{ position: 'fixed', top: 80, right: 24, background: 'linear-gradient(135deg, #312E81, #1E1B4B)', color: '#A5B4FC', padding: '12px 20px', borderRadius: 14, fontSize: 14, fontWeight: 800, zIndex: 300, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 30px rgba(0,0,0,0.3)', animation: 'toastIn 0.3s ease' }}>⚡ +{xpPopup.xp} XP <span style={{ fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>— {xpPopup.label}</span></div>}
     </div>
   )
 }
