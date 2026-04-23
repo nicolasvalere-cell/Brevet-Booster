@@ -263,9 +263,14 @@ function WelcomePage({ settings, completedIds, totalChapters, streak }) {
 // ═══════════════════════════════════════
 // STUDENT: CHAPTERS (3 PDFs + auto-eval)
 // ═══════════════════════════════════════
-function ChaptersPage({ parts, completedIds, toggleComplete }) {
+function ChaptersPage({ parts, completedIds, toggleComplete, userId }) {
   const [openPart, setOpenPart] = useState(parts[0]?.id || null)
   const totalCh = parts.reduce((a, p) => a + (p.chapters?.length || 0), 0)
+
+  const trackPdf = async (pdfType, chapterTitle) => {
+    if (!userId) return
+    try { await supabase.from('pdf_clicks').insert({ user_id: userId, pdf_type: pdfType, chapter_title: chapterTitle }) } catch {}
+  }
   return (
     <div>
       <h1 className="page-title">Chapitres</h1>
@@ -301,16 +306,16 @@ function ChaptersPage({ parts, completedIds, toggleComplete }) {
                       <span style={{ flex: 1, fontSize: 14, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--text-sec)' : 'var(--text)' }}>{ch.title}</span>
                       <div className="row gap-sm" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         {ch.pdf_url && ch.pdf_url !== '' && (
-                          <a href={ch.pdf_url} target="_blank" rel="noreferrer" className="badge badge-success row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Simplifié</a>
+                          <a href={ch.pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('simplifie', ch.title)} className="badge badge-success row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Simplifié</a>
                         )}
                         {ch.detailed_pdf_url && ch.detailed_pdf_url !== '' && (
-                          <a href={ch.detailed_pdf_url} target="_blank" rel="noreferrer" className="badge badge-video row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Développé</a>
+                          <a href={ch.detailed_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('developpe', ch.title)} className="badge badge-video row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Développé</a>
                         )}
                         {ch.exercises_pdf_url && ch.exercises_pdf_url !== '' && (
-                          <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
+                          <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('exercices', ch.title)} className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
                         )}
                         {ch.eval_pdf_url && ch.eval_pdf_url !== '' && (
-                          <a href={ch.eval_pdf_url} target="_blank" rel="noreferrer" className="badge row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer', background: '#FEF3C7', color: '#92400E' }}>{IC.pdf} Auto-éval</a>
+                          <a href={ch.eval_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('auto-eval', ch.title)} className="badge row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer', background: '#FEF3C7', color: '#92400E' }}>{IC.pdf} Auto-éval</a>
                         )}
                       </div>
                     </div>
@@ -1122,12 +1127,14 @@ function GamesPage({ userId }) {
 function AdminProgression({ students, parts }) {
   const [progressData, setProgressData] = useState({})
   const [streakData, setStreakData] = useState({})
+  const [pdfData, setPdfData] = useState({})
   const totalCh = parts.reduce((a, p) => a + (p.chapters?.length || 0), 0)
 
   useEffect(() => {
     const load = async () => {
       const { data: progress } = await supabase.from('student_progress').select('user_id, chapter_id')
       const { data: streaks } = await supabase.from('student_streaks').select('*')
+      const { data: pdfClicks } = await supabase.from('pdf_clicks').select('user_id')
       const grouped = {}
       ;(progress || []).forEach(p => {
         if (!grouped[p.user_id]) grouped[p.user_id] = []
@@ -1137,47 +1144,108 @@ function AdminProgression({ students, parts }) {
       const streakMap = {}
       ;(streaks || []).forEach(s => { streakMap[s.user_id] = s })
       setStreakData(streakMap)
+      const pdfMap = {}
+      ;(pdfClicks || []).forEach(c => { pdfMap[c.user_id] = (pdfMap[c.user_id] || 0) + 1 })
+      setPdfData(pdfMap)
     }
     load()
   }, [])
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—'
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now - d
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    if (diffDays === 0) return "Aujourd'hui"
+    if (diffDays === 1) return 'Hier'
+    if (diffDays < 7) return `Il y a ${diffDays}j`
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+  }
+
+  const formatTime = (dateStr) => {
+    if (!dateStr) return ''
+    return new Date(dateStr).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const getDaysInactive = (streak) => {
+    if (!streak?.last_login) return null
+    const last = new Date(streak.last_login)
+    const now = new Date()
+    return Math.floor((now - last) / (1000 * 60 * 60 * 24))
+  }
+
   return (
     <div>
       <h1 className="page-title">Progression des élèves</h1>
-      <p className="page-subtitle">Suivi en temps réel de chaque élève</p>
-      <div className="card">
-        <div className="card-header">
-          <span>{students.length} élève{students.length > 1 ? 's' : ''}</span>
-        </div>
-        {students.map(s => {
-          const done = (progressData[s.id] || []).length
-          const pct = totalCh > 0 ? Math.round((done / totalCh) * 100) : 0
-          const badge = getBadge(done)
-          const streak = streakData[s.id]
-          return (
-            <div key={s.id} style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div className="row gap-sm">
-                  {badge && <span style={{ fontSize: 20 }}>{badge.emoji}</span>}
-                  <div>
-                    <span style={{ fontWeight: 700 }}>{s.first_name} {s.last_name}</span>
-                    <span style={{ marginLeft: 8, fontFamily: 'monospace', fontSize: 11, color: 'var(--text-sec)' }}>{s.username}</span>
-                  </div>
-                </div>
-                <div className="row gap-md">
-                  {streak && streak.current_streak > 0 && (
-                    <span style={{ fontSize: 12, color: '#F59E0B', fontWeight: 600 }}>🔥 {streak.current_streak}j</span>
-                  )}
-                  <span style={{ fontWeight: 800, fontSize: 16, fontFamily: 'monospace', color: pct >= 75 ? 'var(--success)' : pct >= 40 ? 'var(--accent)' : 'var(--text-sec)' }}>{pct}%</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1 }}><ProgressBar value={done} max={totalCh} height={8} /></div>
-                <span style={{ fontSize: 12, color: 'var(--text-sec)', fontWeight: 500, whiteSpace: 'nowrap' }}>{done}/{totalCh}</span>
-              </div>
-            </div>
-          )
-        })}
+      <p className="page-subtitle">Suivi en temps réel — connexions, PDF et avancement</p>
+      <div className="card" style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg)', borderBottom: '2px solid var(--border)' }}>
+              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Élève</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Progression</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Dernière connexion</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Connexions</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>PDF ouverts</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Streak</th>
+              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: 'var(--text-sec)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Badge</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map(s => {
+              const done = (progressData[s.id] || []).length
+              const pct = totalCh > 0 ? Math.round((done / totalCh) * 100) : 0
+              const badge = getBadge(done)
+              const streak = streakData[s.id]
+              const pdfCount = pdfData[s.id] || 0
+              const daysInactive = getDaysInactive(streak)
+              const isInactive = daysInactive !== null && daysInactive >= 3
+
+              return (
+                <tr key={s.id} style={{ borderBottom: '1px solid var(--border)', background: isInactive ? '#FEF2F2' : 'white' }}>
+                  {/* Élève */}
+                  <td style={{ padding: '14px 16px' }}>
+                    <div style={{ fontWeight: 600 }}>{s.first_name} {s.last_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)', fontFamily: 'monospace' }}>{s.username}</div>
+                    {isInactive && <div style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 700, marginTop: 3 }}>⚠️ Inactif depuis {daysInactive}j</div>}
+                  </td>
+                  {/* Progression */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, fontFamily: 'monospace', color: pct >= 75 ? 'var(--success)' : pct >= 40 ? 'var(--accent)' : 'var(--text-sec)' }}>{pct}%</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{done}/{totalCh}</div>
+                    <div style={{ width: 80, margin: '4px auto 0' }}><ProgressBar value={done} max={totalCh} height={4} /></div>
+                  </td>
+                  {/* Dernière connexion */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 600, color: isInactive ? 'var(--danger)' : 'var(--text)' }}>{formatDate(streak?.last_login_time || streak?.last_login)}</div>
+                    {streak?.last_login_time && <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>{formatTime(streak.last_login_time)}</div>}
+                  </td>
+                  {/* Total connexions */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 18, fontFamily: 'monospace', color: 'var(--accent)' }}>{streak?.total_logins || 0}</div>
+                  </td>
+                  {/* PDF ouverts */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 18, fontFamily: 'monospace', color: pdfCount > 0 ? 'var(--success)' : 'var(--text-sec)' }}>{pdfCount}</div>
+                  </td>
+                  {/* Streak */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    {streak && streak.current_streak > 0 ? (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: '#F59E0B' }}>🔥 {streak.current_streak}j</span>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>—</span>
+                    )}
+                  </td>
+                  {/* Badge */}
+                  <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                    {badge ? <span style={{ fontSize: 22 }}>{badge.emoji}</span> : <span style={{ fontSize: 12, color: 'var(--text-sec)' }}>—</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -1237,12 +1305,15 @@ export default function Home() {
   // Update streak on login
   const updateStreak = useCallback(async (userId) => {
     const today = new Date().toISOString().split('T')[0]
+    const nowISO = new Date().toISOString()
     const { data: existing } = await supabase.from('student_streaks').select('*').eq('user_id', userId).single()
     if (existing) {
       const lastLogin = existing.last_login
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
       let newStreak = existing.current_streak
       if (lastLogin === today) {
+        // Already logged in today, just update time
+        await supabase.from('student_streaks').update({ last_login_time: nowISO }).eq('user_id', userId)
         setStreak(existing); return
       } else if (lastLogin === yesterday) {
         newStreak = existing.current_streak + 1
@@ -1250,11 +1321,12 @@ export default function Home() {
         newStreak = 1
       }
       const bestStreak = Math.max(newStreak, existing.best_streak || 0)
-      await supabase.from('student_streaks').update({ current_streak: newStreak, last_login: today, best_streak: bestStreak }).eq('user_id', userId)
-      setStreak({ current_streak: newStreak, last_login: today, best_streak: bestStreak })
+      const totalLogins = (existing.total_logins || 0) + 1
+      await supabase.from('student_streaks').update({ current_streak: newStreak, last_login: today, best_streak: bestStreak, total_logins: totalLogins, last_login_time: nowISO }).eq('user_id', userId)
+      setStreak({ current_streak: newStreak, last_login: today, best_streak: bestStreak, total_logins: totalLogins })
     } else {
-      await supabase.from('student_streaks').insert({ user_id: userId, current_streak: 1, last_login: today, best_streak: 1 })
-      setStreak({ current_streak: 1, last_login: today, best_streak: 1 })
+      await supabase.from('student_streaks').insert({ user_id: userId, current_streak: 1, last_login: today, best_streak: 1, total_logins: 1, last_login_time: nowISO })
+      setStreak({ current_streak: 1, last_login: today, best_streak: 1, total_logins: 1 })
     }
   }, [])
 
@@ -1317,7 +1389,7 @@ export default function Home() {
       <Sidebar items={isAdmin ? adminNav : studentNav} current={page} setCurrent={setPage} onLogout={logout} role={user.role} />
       <div className="main-content">
         {!isAdmin && page === 'welcome' && <WelcomePage settings={settings} completedIds={completedIds} totalChapters={totalChapters} streak={streak} />}
-        {!isAdmin && page === 'chapters' && <ChaptersPage parts={parts} completedIds={completedIds} toggleComplete={toggleComplete} />}
+        {!isAdmin && page === 'chapters' && <ChaptersPage parts={parts} completedIds={completedIds} toggleComplete={toggleComplete} userId={user.id} />}
         {!isAdmin && page === 'prep' && <PrepPage modules={modules} />}
         {!isAdmin && page === 'exercises' && <ExercisesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
         {!isAdmin && page === 'favorites' && <FavoritesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
