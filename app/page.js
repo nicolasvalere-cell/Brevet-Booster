@@ -84,6 +84,7 @@ const IC = {
   chev: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
   chart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   game: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15" cy="11" r="0.5" fill="currentColor" stroke="none"/><circle cx="17" cy="13" r="0.5" fill="currentColor" stroke="none"/></svg>,
+  menu: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
 }
 
 // ─── Helpers ───
@@ -163,20 +164,35 @@ function LoginPage({ onLogin }) {
 // ═══════════════════════════════════════
 // SIDEBAR
 // ═══════════════════════════════════════
-function Sidebar({ items, current, setCurrent, onLogout, role }) {
+function Sidebar({ items, current, setCurrent, onLogout, role, mobileOpen, setMobileOpen }) {
   return (
-    <div className="sidebar">
-      <div className="sidebar-brand"><div className="sidebar-logo">B</div><span className="sidebar-title">Brevet <span>Booster</span></span></div>
-      {role && <div className={`sidebar-role ${role}`}>{role === 'admin' ? 'Administration' : 'Espace élève'}</div>}
-      <nav className="sidebar-nav">
-        {items.map(it => (
-          <div key={it.id} className={`sidebar-item ${current === it.id ? 'active' : ''}`} onClick={() => setCurrent(it.id)}>
-            {it.icon}<span>{it.label}</span>
-          </div>
-        ))}
-      </nav>
-      <div className="sidebar-bottom"><button className="sidebar-logout" onClick={onLogout}>{IC.logout}<span>Déconnexion</span></button></div>
-    </div>
+    <>
+      {/* Mobile header bar */}
+      <div className="mobile-topbar">
+        <div onClick={() => setMobileOpen(true)} style={{ cursor: 'pointer', padding: 4 }}>{IC.menu}</div>
+        <span style={{ fontSize: 16, fontWeight: 800 }}>Brevet <span style={{ color: 'var(--accent)' }}>Booster</span></span>
+        <div style={{ width: 26 }} />
+      </div>
+      {/* Overlay */}
+      {mobileOpen && <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />}
+      {/* Sidebar */}
+      <div className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">
+          <div className="sidebar-logo">B</div>
+          <span className="sidebar-title">Brevet <span>Booster</span></span>
+          <div className="sidebar-close" onClick={() => setMobileOpen(false)} style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-sec)' }}>{IC.close}</div>
+        </div>
+        {role && <div className={`sidebar-role ${role}`}>{role === 'admin' ? 'Administration' : 'Espace élève'}</div>}
+        <nav className="sidebar-nav">
+          {items.map(it => (
+            <div key={it.id} className={`sidebar-item ${current === it.id ? 'active' : ''}`} onClick={() => { setCurrent(it.id); setMobileOpen(false) }}>
+              {it.icon}<span>{it.label}</span>
+            </div>
+          ))}
+        </nav>
+        <div className="sidebar-bottom"><button className="sidebar-logout" onClick={onLogout}>{IC.logout}<span>Déconnexion</span></button></div>
+      </div>
+    </>
   )
 }
 
@@ -186,135 +202,108 @@ function Sidebar({ items, current, setCurrent, onLogout, role }) {
 function WelcomePage({ settings, completedIds, totalChapters, streak, xp }) {
   const pct = totalChapters > 0 ? Math.round((completedIds.length / totalChapters) * 100) : 0
   const badge = getBadge(completedIds.length)
-  const next = getNextBadge(completedIds.length)
   const [funFact] = useState(() => FUN_FACTS[Math.floor(Math.random() * FUN_FACTS.length)])
   const level = getLevel(xp)
   const nextLevel = getNextLevel(xp)
   const xpInLevel = nextLevel ? xp - level.min : 0
   const xpForNext = nextLevel ? nextLevel.min - level.min : 1
+  const diff = BREVET_DATE - new Date()
+  const daysLeft = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
 
   return (
     <div>
       <h1 className="page-title">Bienvenue sur Brevet Booster</h1>
       <p className="page-subtitle">Ta plateforme de révision maths pour le brevet</p>
 
-      {/* Fun fact */}
-      <div style={{ background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)', borderRadius: 14, padding: '16px 22px', marginBottom: 20, border: '1px solid #C7D2FE', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <span style={{ fontSize: 28 }}>🧠</span>
+      {/* Fun fact - compact */}
+      <div style={{ background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)', borderRadius: 14, padding: '12px 18px', marginBottom: 16, border: '1px solid #C7D2FE', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 22 }}>🧠</span>
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Le savais-tu ?</div>
-          <div style={{ fontSize: 13, color: '#3730A3', lineHeight: 1.5 }}>{funFact}</div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6366F1', textTransform: 'uppercase', letterSpacing: 0.5 }}>Le savais-tu ?</div>
+          <div style={{ fontSize: 13, color: '#3730A3', lineHeight: 1.4 }}>{funFact}</div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        {/* Countdown */}
-        <div className="card" style={{ padding: 24 }}>
-          <div className="row gap-sm" style={{ marginBottom: 16 }}>{IC.clock}<span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-sec)' }}>Compte à rebours brevet</span></div>
-          <Countdown />
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-sec)', marginTop: 8 }}>Brevet de maths — 29 juin 2026</p>
-        </div>
-        {/* Progress */}
-        <div className="card" style={{ padding: 24 }}>
-          <div className="row gap-sm" style={{ marginBottom: 16 }}>{IC.target}<span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-sec)' }}>Ta progression</span></div>
-          <div style={{ fontSize: 48, fontWeight: 900, color: 'var(--accent)', textAlign: 'center', fontFamily: 'monospace', lineHeight: 1 }}>{pct}%</div>
-          <div style={{ margin: '12px 0' }}><ProgressBar value={completedIds.length} max={totalChapters} height={10} /></div>
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-sec)' }}>{completedIds.length} / {totalChapters} chapitres terminés</p>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        {/* Streak */}
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          <div style={{ fontSize: 40, marginBottom: 6 }}>🔥</div>
-          <div style={{ fontSize: 36, fontWeight: 900, fontFamily: 'monospace', color: '#F59E0B', lineHeight: 1 }}>{streak.current_streak || 0}</div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-sec)', marginTop: 6 }}>jour{(streak.current_streak || 0) > 1 ? 's' : ''} de suite</div>
-          {(streak.best_streak || 0) > 0 && <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 4 }}>Record : {streak.best_streak} jours 🏆</div>}
-        </div>
-        {/* Badge */}
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          {badge ? (
-            <>
-              <div style={{ fontSize: 40, marginBottom: 6 }}>{badge.emoji}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: badge.color }}>{badge.name}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 4 }}>Niveau atteint !</div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 40, marginBottom: 6, opacity: 0.3 }}>🥉</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-sec)' }}>Pas encore de badge</div>
-            </>
-          )}
-          {next && <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 8 }}>Prochain : {next.emoji} {next.name} → encore {next.min - completedIds.length} chapitre{next.min - completedIds.length > 1 ? 's' : ''}</div>}
-        </div>
-      </div>
-
-      {/* XP Level */}
-      <div className="card" style={{ padding: 22, marginBottom: 20, background: 'linear-gradient(135deg, #1E1B4B, #312E81)', color: 'white', border: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 32 }}>{level.emoji}</span>
+      {/* XP Level - prominent */}
+      <div style={{ padding: 20, marginBottom: 16, background: 'linear-gradient(135deg, #1E1B4B, #312E81)', color: 'white', borderRadius: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>{level.emoji}</span>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Niveau {level.level}</div>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>{level.name}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Niveau {level.level}</div>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>{level.name}</div>
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: '#A5B4FC' }}>{xp}</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>XP total</div>
+            <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'monospace', color: '#A5B4FC' }}>{xp}</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>XP total</div>
           </div>
         </div>
         {nextLevel && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>
               <span>{level.name}</span>
               <span>{nextLevel.emoji} {nextLevel.name} — {nextLevel.min} XP</span>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, height: 8, overflow: 'hidden' }}>
+            <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, height: 6, overflow: 'hidden' }}>
               <div style={{ width: `${Math.min(100, (xpInLevel / xpForNext) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, #818CF8, #A5B4FC)', borderRadius: 20, transition: 'width 0.5s' }} />
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 4, textAlign: 'center' }}>Encore {nextLevel.min - xp} XP pour le prochain niveau</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 3 }}>Encore {nextLevel.min - xp} XP</div>
           </div>
         )}
-        {!nextLevel && <div style={{ fontSize: 13, color: '#A5B4FC', textAlign: 'center' }}>🏆 Niveau maximum atteint !</div>}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap' }}>
-          {Object.entries(XP_ACTIONS).map(([key, val]) => (
-            <div key={key} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#A5B4FC' }}>+{val.xp}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>{val.label}</div>
+        {!nextLevel && <div style={{ fontSize: 12, color: '#A5B4FC', textAlign: 'center' }}>🏆 Niveau maximum atteint !</div>}
+      </div>
+
+      {/* 4 mini stat cards */}
+      <div className="mini-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+        <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
+          <div style={{ fontSize: 24, fontWeight: 900, fontFamily: 'monospace', color: 'var(--accent)', lineHeight: 1 }}>{pct}%</div>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4 }}>{completedIds.length}/{totalChapters} chapitres</div>
+        </div>
+        <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
+          <div style={{ fontSize: 20, marginBottom: 2 }}>🔥</div>
+          <div style={{ fontSize: 20, fontWeight: 900, fontFamily: 'monospace', color: '#F59E0B', lineHeight: 1 }}>{streak.current_streak || 0}j</div>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 2 }}>de suite</div>
+        </div>
+        <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
+          {badge ? (
+            <>
+              <div style={{ fontSize: 20, marginBottom: 2 }}>{badge.emoji}</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: badge.color }}>{badge.name}</div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 20, marginBottom: 2, opacity: 0.3 }}>🥉</div>
+              <div style={{ fontSize: 10, color: 'var(--text-sec)' }}>Aucun badge</div>
+            </>
+          )}
+        </div>
+        <div className="card" style={{ padding: '14px 8px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 900, fontFamily: 'monospace', color: 'var(--text)', lineHeight: 1 }}>{daysLeft}j</div>
+          <div style={{ fontSize: 10, color: 'var(--text-sec)', marginTop: 4 }}>avant brevet</div>
+        </div>
+      </div>
+
+      {/* Badges compact */}
+      <div className="card" style={{ padding: '12px 20px', marginBottom: 16 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Badges</div>
+        <div style={{ display: 'flex', justifyContent: 'space-around' }}>
+          {[...BADGES].reverse().map(b => (
+            <div key={b.id} style={{ textAlign: 'center', opacity: completedIds.length >= b.min ? 1 : 0.3 }}>
+              <div style={{ fontSize: 22 }}>{b.emoji}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: completedIds.length >= b.min ? b.color : 'var(--text-sec)' }}>{b.min} ch.</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* All badges overview */}
-      <div className="card" style={{ padding: 20, marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-sec)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>Badges à débloquer</div>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'space-around' }}>
-          {[...BADGES].reverse().map(b => {
-            const unlocked = completedIds.length >= b.min
-            return (
-              <div key={b.id} style={{ textAlign: 'center', opacity: unlocked ? 1 : 0.35 }}>
-                <div style={{ fontSize: 30 }}>{b.emoji}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: unlocked ? b.color : 'var(--text-sec)', marginTop: 4 }}>{b.name}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-sec)' }}>{b.min} chapitres</div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Welcome video */}
-      <div className="card">
-        <div style={{ padding: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>Présentation de l&apos;accompagnement</h2>
-          <p style={{ color: 'var(--text-sec)', fontSize: 14, lineHeight: 1.7 }}>{settings.welcome_text || ''}</p>
-        </div>
+      {/* Welcome video - compact */}
+      <div className="card" style={{ padding: 18 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Présentation</h2>
+        <p style={{ color: 'var(--text-sec)', fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>{settings.welcome_text || ''}</p>
         {settings.welcome_video && (
-          <div style={{ padding: '0 24px 24px' }}>
-            <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingBottom: '56.25%', background: '#000' }}>
-              <iframe src={settings.welcome_video} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }} allowFullScreen />
-            </div>
+          <div style={{ borderRadius: 10, overflow: 'hidden', position: 'relative', paddingBottom: '45%', background: '#000' }}>
+            <iframe src={settings.welcome_video} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }} allowFullScreen />
           </div>
         )}
       </div>
@@ -1123,6 +1112,216 @@ function CalculMentalGame({ userId, onBack }) {
   )
 }
 
+// ═══════════════════════════════════════
+// STUDENT: ASSIGNMENTS (Mes devoirs)
+// ═══════════════════════════════════════
+function AssignmentsPage({ userId, earnXP }) {
+  const [assignments, setAssignments] = useState([])
+  const [submissions, setSubmissions] = useState([])
+  const [uploading, setUploading] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: a } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
+      const { data: s } = await supabase.from('submissions').select('*').eq('user_id', userId)
+      setAssignments(a || [])
+      setSubmissions(s || [])
+      setLoading(false)
+    }
+    load()
+  }, [userId])
+
+  const getSubmission = (assignmentId) => submissions.find(s => s.assignment_id === assignmentId)
+
+  const handleUpload = async (assignmentId, file) => {
+    if (!file) return
+    setUploading(assignmentId)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `${userId}/${assignmentId}.${ext}`
+      const { error: uploadErr } = await supabase.storage.from('submissions').upload(path, file, { upsert: true })
+      if (uploadErr) { alert('Erreur upload : ' + uploadErr.message); setUploading(null); return }
+      const { data: urlData } = supabase.storage.from('submissions').getPublicUrl(path)
+      await supabase.from('submissions').upsert({ assignment_id: assignmentId, user_id: userId, image_url: urlData.publicUrl, submitted_at: new Date().toISOString(), corrected: false })
+      const { data: s } = await supabase.from('submissions').select('*').eq('user_id', userId)
+      setSubmissions(s || [])
+      await earnXP(userId, 'open_pdf')
+    } catch (err) { alert('Erreur : ' + err.message) }
+    setUploading(null)
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-sec)' }}>Chargement...</div>
+
+  return (
+    <div>
+      <h1 className="page-title">Mes devoirs</h1>
+      <p className="page-subtitle">Prends en photo ta copie et envoie-la</p>
+      {assignments.length === 0 ? (
+        <div className="card" style={{ padding: 60, textAlign: 'center', color: 'var(--text-sec)' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📝</div>
+          <p style={{ fontSize: 15, fontWeight: 600 }}>Aucun devoir pour l&apos;instant</p>
+          <p style={{ fontSize: 13 }}>Ton prof n&apos;a pas encore donné de devoir</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {assignments.map(a => {
+            const sub = getSubmission(a.id)
+            const isUploading = uploading === a.id
+            return (
+              <div key={a.id} className="card" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 18 }}>📝</span>
+                      <h3 style={{ fontSize: 16, fontWeight: 700 }}>{a.title}</h3>
+                    </div>
+                    {a.description && <p style={{ fontSize: 13, color: 'var(--text-sec)', lineHeight: 1.5, marginBottom: 8 }}>{a.description}</p>}
+                    <div style={{ fontSize: 11, color: 'var(--text-sec)' }}>Donné le {new Date(a.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}</div>
+                  </div>
+                  <div style={{ textAlign: 'center', minWidth: 140 }}>
+                    {!sub ? (
+                      <div>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 20px', borderRadius: 12, background: 'var(--accent)', color: 'white', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+                          📷 {isUploading ? 'Envoi...' : 'Envoyer ma copie'}
+                          <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => handleUpload(a.id, e.target.files[0])} disabled={isUploading} />
+                        </label>
+                        <div style={{ fontSize: 11, color: 'var(--text-sec)', marginTop: 6 }}>Photo ou image</div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="badge badge-success" style={{ padding: '6px 14px', fontSize: 13 }}>✅ Envoyé</div>
+                        {sub.corrected ? (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 28, fontWeight: 900, fontFamily: 'monospace', color: sub.score >= 10 ? 'var(--success)' : 'var(--danger)' }}>{sub.score}/20</div>
+                            {sub.feedback && <p style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 4, lineHeight: 1.4 }}>{sub.feedback}</p>}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--text-sec)', marginTop: 6 }}>⏳ En attente de correction</div>
+                        )}
+                        <a href={sub.image_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, display: 'inline-block' }}>Voir ma copie</a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════
+// ADMIN: ASSIGNMENTS
+// ═══════════════════════════════════════
+function AdminAssignments({ students }) {
+  const [assignments, setAssignments] = useState([])
+  const [submissions, setSubmissions] = useState([])
+  const [modal, setModal] = useState(false)
+  const [corrModal, setCorrModal] = useState(null)
+  const [title, setTitle] = useState('')
+  const [desc, setDesc] = useState('')
+  const [score, setScore] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const load = async () => {
+    const { data: a } = await supabase.from('assignments').select('*').order('created_at', { ascending: false })
+    const { data: s } = await supabase.from('submissions').select('*')
+    setAssignments(a || [])
+    setSubmissions(s || [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const addAssignment = async () => {
+    if (!title) return
+    await supabase.from('assignments').insert({ title, description: desc })
+    setTitle(''); setDesc(''); setModal(false); load()
+  }
+  const delAssignment = async (id) => { await supabase.from('assignments').delete().eq('id', id); load() }
+
+  const correctSubmission = async () => {
+    if (!corrModal) return
+    await supabase.from('submissions').update({ score: parseFloat(score), feedback, corrected: true }).eq('id', corrModal.id)
+    setCorrModal(null); setScore(''); setFeedback(''); load()
+  }
+
+  const getStudent = (userId) => students.find(s => s.id === userId)
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-sec)' }}>Chargement...</div>
+
+  return (
+    <div>
+      <h1 className="page-title">Gestion des devoirs</h1>
+      <p className="page-subtitle">Crée des devoirs et corrige les rendus</p>
+      <button className="btn btn-primary" onClick={() => setModal(true)} style={{ marginBottom: 20 }}>{IC.plus} Nouveau devoir</button>
+
+      {assignments.map(a => {
+        const subs = submissions.filter(s => s.assignment_id === a.id)
+        return (
+          <div key={a.id} className="card" style={{ marginBottom: 16 }}>
+            <div className="card-header">
+              <div>
+                <span style={{ fontWeight: 700 }}>{a.title}</span>
+                {a.description && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-sec)' }}>{a.description}</span>}
+              </div>
+              <div className="row gap-sm">
+                <span className="badge" style={{ background: 'var(--accent-bg)', color: 'var(--accent)' }}>{subs.length} rendu{subs.length > 1 ? 's' : ''}</span>
+                <button onClick={() => delAssignment(a.id)} style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-sec)' }}>{IC.trash}</button>
+              </div>
+            </div>
+            {subs.length === 0 ? (
+              <div style={{ padding: '16px 20px', fontSize: 13, color: 'var(--text-sec)', textAlign: 'center' }}>Aucun rendu pour l&apos;instant</div>
+            ) : (
+              subs.map(sub => {
+                const st = getStudent(sub.user_id)
+                return (
+                  <div key={sub.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderBottom: '1px solid var(--border)', gap: 12, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 150 }}>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{st ? `${st.first_name} ${st.last_name}` : 'Élève'}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-sec)' }}>{new Date(sub.submitted_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div className="row gap-sm" style={{ flexWrap: 'wrap' }}>
+                      <a href={sub.image_url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">📷 Voir</a>
+                      {sub.corrected ? (
+                        <span className="badge badge-success" style={{ fontSize: 14, fontWeight: 800 }}>{sub.score}/20</span>
+                      ) : (
+                        <button className="btn btn-primary btn-sm" onClick={() => { setCorrModal(sub); setScore(''); setFeedback('') }}>Corriger</button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        )
+      })}
+
+      {modal && (
+        <Modal title="Nouveau devoir" onClose={() => setModal(false)}>
+          <div className="form-group"><label className="form-label">Titre</label><input className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Devoir n°3 — Pythagore" autoFocus /></div>
+          <div className="form-group"><label className="form-label">Consigne (optionnel)</label><input className="form-input" value={desc} onChange={e => setDesc(e.target.value)} placeholder="Ex: Exercices 1 à 4 page 12" /></div>
+          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setModal(false)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={addAssignment}>Créer</button></div>
+        </Modal>
+      )}
+
+      {corrModal && (
+        <Modal title="Corriger le devoir" onClose={() => setCorrModal(null)}>
+          <div style={{ marginBottom: 16 }}>
+            <a href={corrModal.image_url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>📷 Voir la copie de l&apos;élève</a>
+          </div>
+          <div className="form-group"><label className="form-label">Note /20</label><input className="form-input" type="number" step="0.5" min="0" max="20" value={score} onChange={e => setScore(e.target.value)} placeholder="15" /></div>
+          <div className="form-group"><label className="form-label">Commentaire (optionnel)</label><input className="form-input" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Ex: Bon travail, attention aux signes" /></div>
+          <div className="modal-actions"><button className="btn btn-secondary btn-sm" onClick={() => setCorrModal(null)}>Annuler</button><button className="btn btn-primary btn-sm" onClick={correctSubmission}>Valider la note</button></div>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
 function GamesPage({ userId, earnXP }) {
   const [activeGame, setActiveGame] = useState(null)
   const [records, setRecords] = useState({})
@@ -1326,6 +1525,7 @@ export default function Home() {
   const [user, setUser] = useState(null)
   const [page, setPage] = useState('welcome')
   const [toast, setToast] = useState(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [students, setStudents] = useState([])
@@ -1480,6 +1680,7 @@ export default function Home() {
     { id: 'prep', label: 'Prépa Brevet', icon: IC.target },
     { id: 'exercises', label: 'Exos Brevet', icon: IC.edit },
     { id: 'favorites', label: 'Mes favoris', icon: IC.star },
+    { id: 'assignments', label: 'Mes devoirs', icon: IC.pdf },
     { id: 'games', label: 'Jeux', icon: IC.game },
   ]
   const adminNav = [
@@ -1487,22 +1688,25 @@ export default function Home() {
     { id: 'admin-students', label: 'Élèves', icon: IC.users },
     { id: 'admin-content', label: 'Contenu', icon: IC.book },
     { id: 'admin-progress', label: 'Progression', icon: IC.chart },
+    { id: 'admin-assignments', label: 'Devoirs', icon: IC.edit },
   ]
 
   return (
     <div className="app-layout">
-      <Sidebar items={isAdmin ? adminNav : studentNav} current={page} setCurrent={setPage} onLogout={logout} role={user.role} />
+      <Sidebar items={isAdmin ? adminNav : studentNav} current={page} setCurrent={setPage} onLogout={logout} role={user.role} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="main-content">
         {!isAdmin && page === 'welcome' && <WelcomePage settings={settings} completedIds={completedIds} totalChapters={totalChapters} streak={streak} xp={xp} />}
         {!isAdmin && page === 'chapters' && <ChaptersPage parts={parts} completedIds={completedIds} toggleComplete={toggleComplete} userId={user.id} earnXP={earnXP} />}
         {!isAdmin && page === 'prep' && <PrepPage modules={modules} />}
         {!isAdmin && page === 'exercises' && <ExercisesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
         {!isAdmin && page === 'favorites' && <FavoritesPage exercises={exercises} favoriteIds={favoriteIds} toggleFavorite={toggleFavorite} />}
+        {!isAdmin && page === 'assignments' && <AssignmentsPage userId={user.id} earnXP={earnXP} />}
         {!isAdmin && page === 'games' && <GamesPage userId={user.id} earnXP={earnXP} />}
         {isAdmin && page === 'admin-dash' && <AdminDashboard students={students} parts={parts} exercises={exercises} />}
         {isAdmin && page === 'admin-students' && <AdminStudents students={students} reload={loadData} showToast={showToast} />}
         {isAdmin && page === 'admin-content' && <AdminContent parts={parts} reload={loadData} showToast={showToast} />}
         {isAdmin && page === 'admin-progress' && <AdminProgression students={students} parts={parts} />}
+        {isAdmin && page === 'admin-assignments' && <AdminAssignments students={students} />}
       </div>
       {toast && <Toast message={toast} />}
       {xpPopup && <div style={{ position: 'fixed', top: 80, right: 24, background: 'linear-gradient(135deg, #312E81, #1E1B4B)', color: '#A5B4FC', padding: '12px 20px', borderRadius: 14, fontSize: 14, fontWeight: 800, zIndex: 300, display: 'flex', alignItems: 'center', gap: 8, boxShadow: '0 8px 30px rgba(0,0,0,0.3)', animation: 'toastIn 0.3s ease' }}>⚡ +{xpPopup.xp} XP <span style={{ fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>— {xpPopup.label}</span></div>}
