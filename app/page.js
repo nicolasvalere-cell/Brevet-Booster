@@ -85,6 +85,7 @@ const IC = {
   chart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
   game: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><circle cx="15" cy="11" r="0.5" fill="currentColor" stroke="none"/><circle cx="17" cy="13" r="0.5" fill="currentColor" stroke="none"/></svg>,
   menu: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  arrowLeft: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
 }
 
 // ─── Helpers ───
@@ -316,6 +317,7 @@ function WelcomePage({ settings, completedIds, totalChapters, streak, xp }) {
 // ═══════════════════════════════════════
 function ChaptersPage({ parts, completedIds, toggleComplete, userId, earnXP }) {
   const [openPart, setOpenPart] = useState(parts[0]?.id || null)
+  const [viewingPdf, setViewingPdf] = useState(null) // { url, title, type }
   const totalCh = parts.reduce((a, p) => a + (p.chapters?.length || 0), 0)
 
   const trackPdf = async (pdfType, chapterTitle) => {
@@ -323,10 +325,48 @@ function ChaptersPage({ parts, completedIds, toggleComplete, userId, earnXP }) {
     try { await supabase.from('pdf_clicks').insert({ user_id: userId, pdf_type: pdfType, chapter_title: chapterTitle }) } catch {}
     await earnXP(userId, 'open_pdf')
   }
+
+  const openPdf = (url, title, type) => {
+    trackPdf(type, title)
+    setViewingPdf({ url, title, type })
+  }
+
+  // If viewing a PDF, show the viewer
+  if (viewingPdf) {
+    const typeLabels = { cours: 'Cours', exercices: 'Exercices', 'auto-eval': 'Auto-évaluation' }
+    const typeColors = { cours: { bg: 'var(--accent-bg)', color: 'var(--accent)' }, exercices: { bg: 'var(--danger-bg)', color: 'var(--danger)' }, 'auto-eval': { bg: '#FEF3C7', color: '#92400E' } }
+    const tc = typeColors[viewingPdf.type] || typeColors.cours
+    return (
+      <div>
+        {/* Header bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button onClick={() => setViewingPdf(null)} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {IC.arrowLeft} Retour
+            </button>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{viewingPdf.title}</div>
+              <span className="badge" style={{ background: tc.bg, color: tc.color, marginTop: 4 }}>{typeLabels[viewingPdf.type]}</span>
+            </div>
+          </div>
+          <a href={viewingPdf.url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">↗ Ouvrir dans un nouvel onglet</a>
+        </div>
+        {/* PDF Viewer */}
+        <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)', background: '#525659' }}>
+          <iframe
+            src={`${viewingPdf.url}#toolbar=1&navpanes=0`}
+            style={{ width: '100%', height: 'calc(100vh - 180px)', minHeight: 500, border: 'none', display: 'block' }}
+            title={viewingPdf.title}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <h1 className="page-title">Chapitres</h1>
-      <p className="page-subtitle">{totalCh} chapitres — cours simplifié, cours développé et exercices</p>
+      <p className="page-subtitle">{totalCh} chapitres — cours, exercices et auto-évaluation</p>
       {parts.map(part => {
         const isOpen = openPart === part.id
         const chapters = part.chapters || []
@@ -348,27 +388,42 @@ function ChaptersPage({ parts, completedIds, toggleComplete, userId, earnXP }) {
               </div>
             </div>
             {isOpen && (
-              <div style={{ paddingLeft: 16, marginTop: 6 }}>
+              <div style={{ paddingLeft: 0, marginTop: 6 }}>
                 {chapters.map((ch, i) => {
                   const isDone = completedIds.includes(ch.id)
+                  const hasCours = ch.pdf_url && ch.pdf_url !== ''
+                  const hasExos = ch.exercises_pdf_url && ch.exercises_pdf_url !== ''
+                  const hasEval = ch.eval_pdf_url && ch.eval_pdf_url !== ''
                   return (
-                    <div key={ch.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', background: 'var(--card)', borderRadius: 12, marginTop: 6, border: '1px solid var(--border)' }}>
-                      <div className={`checkbox ${isDone ? 'checked' : ''}`} onClick={() => toggleComplete(ch.id)}>{isDone && IC.check}</div>
-                      <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontSize: 12, fontWeight: 800, fontFamily: 'monospace', flexShrink: 0 }}>{i + 1}</div>
-                      <span style={{ flex: 1, fontSize: 14, fontWeight: 500, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--text-sec)' : 'var(--text)' }}>{ch.title}</span>
-                      <div className="row gap-sm" style={{ flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {ch.pdf_url && ch.pdf_url !== '' && (
-                          <a href={ch.pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('simplifie', ch.title)} className="badge badge-success row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Simplifié</a>
-                        )}
-                        {ch.detailed_pdf_url && ch.detailed_pdf_url !== '' && (
-                          <a href={ch.detailed_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('developpe', ch.title)} className="badge badge-video row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Développé</a>
-                        )}
-                        {ch.exercises_pdf_url && ch.exercises_pdf_url !== '' && (
-                          <a href={ch.exercises_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('exercices', ch.title)} className="badge badge-pdf row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer' }}>{IC.pdf} Exercices</a>
-                        )}
-                        {ch.eval_pdf_url && ch.eval_pdf_url !== '' && (
-                          <a href={ch.eval_pdf_url} target="_blank" rel="noreferrer" onClick={() => trackPdf('auto-eval', ch.title)} className="badge row gap-sm" style={{ textDecoration: 'none', cursor: 'pointer', background: '#FEF3C7', color: '#92400E' }}>{IC.pdf} Auto-éval</a>
-                        )}
+                    <div key={ch.id} className="card" style={{ padding: '16px 18px', marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                        <div className={`checkbox ${isDone ? 'checked' : ''}`} onClick={() => toggleComplete(ch.id)}>{isDone && IC.check}</div>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontSize: 12, fontWeight: 800, fontFamily: 'monospace', flexShrink: 0 }}>{i + 1}</div>
+                        <span style={{ flex: 1, fontSize: 15, fontWeight: 600, textDecoration: isDone ? 'line-through' : 'none', color: isDone ? 'var(--text-sec)' : 'var(--text)' }}>{ch.title}</span>
+                      </div>
+                      {/* 3 buttons */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginLeft: 52 }}>
+                        <button
+                          onClick={() => hasCours && openPdf(ch.pdf_url, ch.title, 'cours')}
+                          disabled={!hasCours}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 8px', borderRadius: 10, border: '1px solid var(--border)', background: hasCours ? 'var(--accent-bg)' : 'var(--bg)', color: hasCours ? 'var(--accent)' : 'var(--text-sec)', fontSize: 13, fontWeight: 600, cursor: hasCours ? 'pointer' : 'default', fontFamily: 'inherit', transition: 'all 0.15s', opacity: hasCours ? 1 : 0.4 }}
+                        >
+                          📘 Cours
+                        </button>
+                        <button
+                          onClick={() => hasExos && openPdf(ch.exercises_pdf_url, ch.title, 'exercices')}
+                          disabled={!hasExos}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 8px', borderRadius: 10, border: '1px solid var(--border)', background: hasExos ? 'var(--danger-bg)' : 'var(--bg)', color: hasExos ? 'var(--danger)' : 'var(--text-sec)', fontSize: 13, fontWeight: 600, cursor: hasExos ? 'pointer' : 'default', fontFamily: 'inherit', transition: 'all 0.15s', opacity: hasExos ? 1 : 0.4 }}
+                        >
+                          ✏️ Exercices
+                        </button>
+                        <button
+                          onClick={() => hasEval && openPdf(ch.eval_pdf_url, ch.title, 'auto-eval')}
+                          disabled={!hasEval}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '10px 8px', borderRadius: 10, border: '1px solid var(--border)', background: hasEval ? '#FEF3C7' : 'var(--bg)', color: hasEval ? '#92400E' : 'var(--text-sec)', fontSize: 13, fontWeight: 600, cursor: hasEval ? 'pointer' : 'default', fontFamily: 'inherit', transition: 'all 0.15s', opacity: hasEval ? 1 : 0.4 }}
+                        >
+                          📝 Auto-éval
+                        </button>
                       </div>
                     </div>
                   )
